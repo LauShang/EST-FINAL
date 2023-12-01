@@ -34,7 +34,18 @@ dicho condado y encuentra que 69 de 310 personas en la muestra han completado
 la preparatoria. Estos resultados soportan su hipótesis? (describe tu elección de
 prueba de hipótesis, valor p y conclusión).
 
+```{r}
+# Prueba de Wald
+p_hat <- 69 / 310
+ee <- sqrt(p_hat * (1 - p_hat) / 310)
+w <- (p_hat - 0.26) / ee
+valor_p <- 2 * (1 - pnorm(abs(w)))
+valor_p
+```
 
+
+- **Elijimos prueba de Wald porque no depende de ningún parámetro desconocido**
+- **Tenemos evidencia baja de que el porcentaje es menor en el condado del estudio ya que el p value es .11**
 
 1.2 Mendel criaba chícharos de semillas lisas amarillas y de semillas
 corrugadas verdes. Éstas daban lugar a 4 tipos de descendientes: amarrillas lisas, amarillas corrugadas, verdes lisas y verdes corrugadas. El número de cada una
