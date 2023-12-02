@@ -566,23 +566,36 @@ solucion$par
 ```{r}
 very_lib <- datos1 %>%  filter(ideo == "very liberal") %>% group_by(state,ideo) %>% summarise(n())
 all_enc <- datos1 %>% group_by(state) %>% summarise(n())
-very_lib %>% inner_join(all_enc,by="state") %>% rename("very_lib" = "n().x", "tot" = "n().y")
+very_lib <- very_lib %>% inner_join(all_enc,by="state") %>% rename("very_lib" = "n().x", "tot" = "n().y") %>% mutate(max_ver = very_lib/tot)
+
+ggplot(very_lib, aes(x=tot, y=max_ver)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
 
 ```
 
+*Con forme aumenta el número de encuestas, el valor de máxima verosimilitud se acerca al calculado para toda la base.*
 
   - Grafica en el eje *x* el porcentaje de votos que obtuvo Obama en la elección
   para cada estado y en el eje *y* la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas? (usa los datos *2008ElectionResult.csv*)
   
 ```{r}
 results = read.csv('./data/2008ElectionResult.csv')
+results <- results %>% select(vote_Obama_pct,state) %>% mutate(state = tolower(state) )
+#vote_Obama_pct
+#state
+results <- very_lib %>% inner_join(results,by="state") 
 glimpse(results)
 ```
 
 
 ```{r}
-
+ggplot(results, aes(x=vote_Obama_pct, y=max_ver)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
 ```
+
+*Con forme aumenta el número de votos para Obama, el valor de máxima verosimilitud se acerca al calculado para toda la base.*
 
 
 * Estima el mismo porcentaje (*very liberal*) usando inferencia bayesiana, en particular
