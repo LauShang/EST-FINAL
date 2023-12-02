@@ -482,12 +482,21 @@ ggplot(logsig, aes(x = lsig)) +
 
 * Ahora volvamos a inferencia bayesiana, calcula  un intervalo de confianza para $\tau$ y un histograma de la distribución posterior de $\tau$.
 
-```{r}
 
+```{r}
+sp_log <- sim_posterior %>% mutate(logSigma = log(sqrt(sigma2)))
+si_log <- sim_inicial %>% mutate(logSigma = log(sqrt(sigma2)))
+```
+
+
+```{r}
+sims2 <- bind_rows(si_log, sp_log)
+ggplot(sims2, aes(x = logSigma, fill = dist)) +
+  geom_histogram(aes(x = logSigma), bins = 30, alpha = 0.5, position = "identity")
 ```
 
 ```{r}
-
+quantile(sp_log$logSigma, c(0.025, 0.975)) %>% round(2)
 ```
 
 
@@ -501,23 +510,64 @@ encuestas realizadas durante la campaña presidencial 2008 de EUA.
 
 ```{r}
 poll_data <- foreign::read.dta("data/pew_research_center_june_elect_wknd_data.dta")
-glimpse(poll_data)
+#glimpse(poll_data)
 ```
 
 * Estima el porcentaje de la población de cada estado (excluyendo Alaska, Hawai, 
 y DC)  que se considera *very liberal*, utilizando el estimador de máxima 
 verosimilitud.
 
+*Considerando una distribución binomial, tenemos que el estimador de máxima verosimilitud es:* $\hat p\frac{k}{n}$
+
 ```{r}
-#variable ideo y state
+datos1 <- poll_data %>% select(ideo,state) %>% mutate(binary=ifelse(is.na(ideo), ideo, ideo == "very liberal"))
+datos1 %>% group_by(ideo) %>% summarise(n())
 ```
+
+```{r}
+n = nrow(datos1)
+k = 1470
+p_hat = k / n
+p_hat
+```
+
+*otra forma de calcularlo es:*
+
+```{r}
+crear_log_bi <- function(n,k){
+  log_verosimilitud <- function(p){
+  k * log(p) + (n-k) * log(1-p)
+  }
+  log_verosimilitud
+}
+```
+
+
+
+```{r}
+log_verosimilitudBI <- crear_log_bi(n,k)
+
+dat_verosim <- tibble(x = seq(0,1, 0.01)) %>% mutate(log_prob = map_dbl(x, log_verosimilitudBI))
+ggplot(dat_verosim, aes(x = x, y = log_prob)) + geom_line() +
+  geom_vline(xintercept = p_hat, color = "red") +
+  xlab("p")
+```
+
+```{r}
+solucion <- optim(p = 0.05, log_verosimilitud, control = list(fnscale = -1))
+solucion$par
+```
+
 
 
   - Grafica en el eje *x* el número de encuestas para cada estado y en el eje *y* 
   la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas?  
   
 ```{r}
-#state ideo
+very_lib <- datos1 %>%  filter(ideo == "very liberal") %>% group_by(state,ideo) %>% summarise(n())
+all_enc <- datos1 %>% group_by(state) %>% summarise(n())
+very_lib %>% inner_join(all_enc,by="state") %>% rename("very_lib" = "n().x", "tot" = "n().y")
+
 ```
 
 
