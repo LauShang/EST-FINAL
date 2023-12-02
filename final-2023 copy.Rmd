@@ -6,6 +6,8 @@ output: html_document
 ```{r}
 library(dplyr)
 library(tidyverse)
+library(purrr)
+library(invgamma)
 ```
 
 
@@ -355,6 +357,13 @@ est_fin[2,2]^2
 ```
 
 
+```{r}
+sigmas2 <- reps_boot %>% filter(parametro %in% c("sigma")) %>% mutate(sigma2 = estimador_boot^2)
+ggplot(sigmas2, aes(x = sigma2)) +
+  geom_histogram() 
+```
+
+
 
 
 
@@ -364,48 +373,141 @@ est_fin[2,2]^2
 especificando una inicial Gamma Inversa, justifica tu elección de los parámetros 
 de la distribución inicial y grafica la función de densidad.
 
-```{r}
+*Para elegir los parámetros, recordamos que la media de la distribución gamma inversa es $\mu=\frac{\beta}{\alpha+1}$*
 
+```{r}
+n = 5000
+alpha = 100
+beta = sd(x)^2 * alpha + sd(x)
+mean(rinvgamma(n, alpha, beta))
+sim_inicial <- tibble(sigma2 =  rinvgamma(n, alpha, beta))
+
+ggplot(sim_inicial) + geom_histogram(aes(x = sigma2, y = ..density..), bins = 15)
 ```
 
 
 * Calcula analíticamente la distribución posterior.
 
+
+
 * Realiza un histograma de simulaciones de la distribución posterior y calcula
 el error estándar de la distribución.
 
 ```{r}
+n = length(x)
+b = (sd(x)^2)*n
+mu = mean(x)
+
+alpha2 = alpha + n/2
+beta2 = beta +b/2
+
+sim_posterior <-  tibble(sigma2 = rinvgamma(n, alpha2, beta2))
 
 ```
 
 
+```{r}
+sim_inicial <- sim_inicial %>% mutate(dist = "inicial")
+sim_posterior <- sim_posterior %>% mutate(dist = "posterior")
+sims <- bind_rows(sim_inicial, sim_posterior)
+ggplot(sims, aes(x = sigma2, fill = dist)) +
+  geom_histogram(aes(x = sigma2), bins = 30, alpha = 0.5, position = "identity")
+```
+
+
+```{r}
+f <- c(0.025, 0.975)
+sims %>% group_by(dist) %>%
+  summarise(error = sd(sigma2)) 
+```
+
+
+
+
 * ¿Cómo se comparan tus resultados con los de bootstrap paramétrico?
+
+*tiene mejores resultados el bootstrap paramétrico, probablemente la información que metimos al suponer distribuciones no sea la más adecuada*
 
 2.3 Supongamos que ahora buscamos hacer inferencia del parámetro 
 $\tau=log(\sigma)$, ¿cuál es el estimador de máxima verosimilitud?
+
+```{r}
+var_log <- log(est_mv[2,1])
+var_log
+```
+
 
 * Utiliza bootstrap paramétrico para generar un intervalo de confianza del 95%
 para el parámetro $\tau$ y realiza un histograma de las replicaciones 
 bootstrap.
 
+```{r}
+logsig <- reps_boot %>% filter(parametro %in% c("sigma")) %>% mutate(lsig = log(estimador_boot))
+quantile(logsig$lsig, c(0.025, 0.975)) %>% round(2)
+```
+
+
+```{r}
+logsig <- reps_boot %>% filter(parametro %in% c("sigma")) %>% mutate(lsig = log(estimador_boot))
+ggplot(logsig, aes(x = lsig)) +
+  geom_histogram() 
+```
+
+
+
 * Ahora volvamos a inferencia bayesiana, calcula  un intervalo de confianza para $\tau$ y un histograma de la distribución posterior de $\tau$.
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
 
 ### 3. Bayesiana y regularización
 
 Los datos *pew_research_center_june_elect_wknd_data.dta* tienen información de 
-ecnuestas realizadas durante la campaña presidencial 2008 de EUA.
+encuestas realizadas durante la campaña presidencial 2008 de EUA.
 
 ```{r}
 poll_data <- foreign::read.dta("data/pew_research_center_june_elect_wknd_data.dta")
+glimpse(poll_data)
 ```
 
 * Estima el porcentaje de la población de cada estado (excluyendo Alaska, Hawai, 
 y DC)  que se considera *very liberal*, utilizando el estimador de máxima 
 verosimilitud.
+
+```{r}
+#variable ideo y state
+```
+
+
   - Grafica en el eje *x* el número de encuestas para cada estado y en el eje *y* 
   la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas?  
+  
+```{r}
+#state ideo
+```
+
+
   - Grafica en el eje *x* el porcentaje de votos que obtuvo Obama en la elección
   para cada estado y en el eje *y* la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas? (usa los datos *2008ElectionResult.csv*)
+  
+```{r}
+
+```
+
+
+```{r}
+
+```
+
 
 * Estima el mismo porcentaje (*very liberal*) usando inferencia bayesiana, en particular
 la familia conjugada beta-binomial. Deberás estimar la proporción de manera 
@@ -413,13 +515,27 @@ independiente para cada estado, sin embargo, utilizarás la misma inicial a lo
 largo de todos: $Beta(8,160)$.
 
   - Simula de la distribución incial y describe.
+
+```{r}
+
+```
+
   
   - Para dos de los estados: Idaho y Virginia, adicional a calcular la posterior
   usando las propiedades de la familia conjugada, utiliza Stan para hacer la inferencia, 
   revisa los diagnósticos de convergencia y describe tus observaciones ($\hat{R}$ y $ESS$).
+  
+```{r}
+
+```
+
 
   - Utiliza la media posterior de cada estado como estimador puntual y repite las
   gráficas del inciso anterior.
+
+```{r}
+
+```
 
 
 **Nota:** En problemas como este, donde estamos estimando un parámetro para cada 
