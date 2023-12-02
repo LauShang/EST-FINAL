@@ -1,10 +1,15 @@
 ---
 title: "Final Fundamentos 2023"
-author: "Lauro Reyes Rosas 000213245"
-author: "Sara luz Valenzuela Camacho 000204535"
+author: "Lauro Reyes Rosas 000213245 & Sara luz Valenzuela Camacho 000204535"
 date: "2023-12-05"
 output: html_document
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error = TRUE, message = FALSE)
+library(tidyverse)
+library(patchwork)
+```
 
 Un reporte con las respuestas se deberá enviar por correo electrónico a más 
 tardar el martes 5 a las 21:00 horas.
@@ -39,10 +44,9 @@ prueba de hipótesis, valor p y conclusión).
 p_hat <- 69 / 310
 ee <- sqrt(p_hat * (1 - p_hat) / 310)
 w <- (p_hat - 0.26) / ee
-valor_p <- 2 * (1 - pnorm(abs(w)))
-valor_p
+p_value <- 2 * (1 - pnorm(abs(w)))
+cat("p-value: ",p_value)
 ```
-
 
 - **Elijimos prueba de Wald porque no depende de ningún parámetro desconocido**
 - **Tenemos evidencia baja de que el porcentaje es menor en el condado del estudio ya que el p value es .11**
@@ -55,19 +59,56 @@ $$p=(9/16,3/16,3/16,1/16)$$
 A lo largo de $n=556$ experimentos observó $x=(315,101,108,32)$. Utiliza la prueba
 de cociente de verosimilitudes para probar $H_0:p=p_0$ contra $H_0:p\ne p_0$.
 
+```{r}
+p_0 <- c(9/16, 3/16, 3/16, 1/16)  
+x <- c(315, 101, 108, 32)       
+n <- 556
+H0 <- dmultinom(x, size = n, prob = p_0, log = TRUE)
+# MLE
+p_hat <- x / n  
+H1 <- dmultinom(x, size = n, prob = p_hat, log = TRUE)
+lambda <- 2 * (H1 - H0)
+p_value <- pchisq(lambda, df = 4, lower.tail = FALSE)
+cat("p-value: ",p_value)
+```
 
+**Valor p es bastante alto, no se puede rechazar la hipótesis nula**
 
 1.3. Sean $X_1, ...X_n \sim Poisson(\lambda)$,
 
 * Sea $\lambda_0>0$. ¿Cuál es la prueba Wald para
 $H_0: \lambda = \lambda_0, H_1: \lambda \neq \lambda_0$
 
+```{r}
+wald_poisson <- function(x, lambda_0){
+  lambda_1 <- mean(x)
+  se_lambda <- sqrt(lambda_1 / length(x))
+  z <- (lambda_1 - lambda_0) / se_lambda
+  p_value <- 2 * pnorm(-abs(z))
+  p_value
+}
+```
+
 * Si $\lambda_0=1$, $n=20$ y $\alpha = 0.05$. Simula  $X_1, ...X_n \sim Poisson(\lambda_0)$ y realiza la prueba Wald, repite 1000 veces y registra
 el porcentaje de veces que rechazas $H_0$, qué tan cerca te queda el
 error del tipo 1 de $0.05$?
 
+```{r}
+set.seed(4)
+lambda_0 <- 1
+n <- 20
+alpha <- 0.05
+N <- 1000
+simulations <- numeric(N)
 
+for (i in 1:N) {
+    simulations[i] <- wald_poisson(rpois(n,lambda_0),lambda_0)
+}
 
+cat("Error tipo 1: ",mean(simulations < alpha))
+```
+
+**Proporción de rechazos de la hipótesis nula es cercana a alpha sugiriendo que la prueba de Wald está calibrada.**
 
 ## 2. Relación entre bootstrap e inferencia bayesiana
 
@@ -117,8 +158,60 @@ En los puntos 2.1 y 2.2 buscamos hacer inferencia del parámetro $\sigma^2$.
 verosimilitud para $\sigma^2$.  Supongamos que observamos los datos 
 `x` (en la carpeta datos), ¿Cuál es tu estimación de la varianza?
 
+```{r}
+load("data/x.RData")
+
+crear_log_p <- function(x){
+  log_p <- function(pars){
+    mean = pars[1]
+    desv_est = pars[2]
+    z <- (x - 0) / desv_est
+    log_verosim <- -(log(desv_est) +  0.5 * mean(z^2))
+    log_verosim
+  }  
+  log_p
+}
+log_p <- crear_log_p(x)
+res <- optim(c(0, 0.5), log_p, control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+# MLE
+est_mle <- res$par[2]^2
+sigma_est=mean(x^2)
+cat("Sigma estimada: ",sigma_est,"- MLE: ",est_mle)
+```
+
+
 * Aproxima el error estándar de la estimación usando __bootstrap paramétrico__ y 
 realiza un histograma de las replicaciones bootstrap.
+
+```{r, warning=FALSE, cache=TRUE}
+set.seed(4)
+simular_modelo <- function(n, media, sigma){
+  rnorm(n, media, sigma)
+}
+muestra_bootstrap <- simular_modelo(length(x), 0 ,sqrt(est_mle))
+
+log_p_boot <- crear_log_p(muestra_bootstrap)
+res_boot <- optim(c(0, 0.5), log_p_boot, 
+  control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+
+est_mle_boot <- res_boot$par[2]^2
+
+rep_boot <- function(rep, crear_log_p, est_mle, n){
+  muestra_bootstrap <- simular_modelo(n, 0, sqrt(est_mle))
+  log_p_boot <- crear_log_p(muestra_bootstrap)
+  # optimizamos
+  res_boot <- optim(c(0, 0.5), log_p_boot, 
+    control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+  try(if(res_boot$convergence != 0) stop("No se alcanzó convergencia."))
+  tibble(parametro = "sigma_2", estimador_boot = res_boot$par[2]^2) 
+}
+reps_boot <- map_dfr(1:5000, ~ rep_boot(.x, crear_log_p, est_mle, length(x)), rep = ".id")
+
+ee <- reps_boot %>% summarise(ee_boot = sd(estimador_boot)) 
+cat("Error estándar bootstrap: ",ee$ee_boot)
+ggplot(reps_boot, aes(x = estimador_boot)) +
+  geom_histogram(title = "Replicaciones Bootstrap",color="black", fill="gray") +facet_wrap(~parametro)
+```
 
 2.2 Análisis bayesiano
 
@@ -126,12 +219,57 @@ realiza un histograma de las replicaciones bootstrap.
 especificando una inicial Gamma Inversa, justifica tu elección de los parámetros 
 de la distribución inicial y grafica la función de densidad.
 
+$$\sigma^2 = \frac{\beta^2}{{(\alpha-1)}^2 - (\alpha-2)}\quad for\quad\alpha>2 $$
+**por lo tanto escojemos** $\alpha$ = 2 **y** $\beta$ = $\alpha*\hat{\theta}$ **para que la escala de la distribución inicial sea igual a la estimación de máxima verosimilitud de la varianza.**
+
+```{r}
+aplha <- 2
+beta <- alpha * est_mle
+dinv_gamma <- function(sigma2, alpha, beta){
+  # WIKIPEDIA: {\displaystyle f(x;\alpha ,\beta )={\frac {\beta ^{\alpha }}{\Gamma (\alpha )}}(1/x)^{\alpha +1}\exp \left(-\beta /x\right)}
+  (beta^alpha / gamma(alpha)) * (1/sigma2)^(alpha + 1) * exp(-beta / sigma2)
+}
+
+x_axis <- seq(1, 1000, 1)
+plot(x_axis, dinv_gamma(x_axis, alpha=aplha, beta=beta), type="l")
+```
+
 * Calcula analíticamente la distribución posterior.
 
+$$f(\sigma^2 \,|\, x_1, ..., x_n) = \text{GammaI}\left(\alpha + \frac{2n}{2}, \beta + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu)^2\right)$$
 * Realiza un histograma de simulaciones de la distribución posterior y calcula
 el error estándar de la distribución.
 
+```{r}
+simulacion_posterior <- function(x, alpha, beta, n){
+  alpha_posterior <- alpha + length(x) / 2
+  beta_posterior <- beta + sum(x^2) / 2
+  posterior <- 1 / rgamma(n=n, shape=alpha_posterior, rate=beta_posterior)
+  posterior
+}
+
+posterior <- simulacion_posterior(x,alpha, beta, 5000)
+ee_posterior <- sd(posterior)
+cat("Error estándar de la posterior: ",ee_posterior)
+#plot
+ggplot(data.frame(posterior), aes(x = posterior)) +
+  geom_histogram(color="black", fill="gray")
+
+```
+
 * ¿Cómo se comparan tus resultados con los de bootstrap paramétrico?
+```{r}
+compare_data <- tibble(
+    method = rep(c("boot", "bayes"), each = length(posterior)),
+    sigma2 = c(reps_boot$estimador_boot, posterior)
+)
+
+ggplot(compare_data, aes(x = sigma2, fill = method)) +
+  geom_histogram(aes(x = sigma2), bins = 30, alpha = 0.5, position = "identity")
+```
+
+
+**Observamos que las distribuciones son bastante parecidas, aunque la distribución posterior muestra una ligera inclinación hacia la derecha**
 
 2.3 Supongamos que ahora buscamos hacer inferencia del parámetro 
 $\tau=log(\sigma)$, ¿cuál es el estimador de máxima verosimilitud?
@@ -145,7 +283,7 @@ bootstrap.
 ### 3. Bayesiana y regularización
 
 Los datos *pew_research_center_june_elect_wknd_data.dta* tienen información de 
-ecnuestas realizadas durante la campaña presidencial 2008 de EUA.
+encuestas realizadas durante la campaña presidencial 2008 de EUA.
 
 ```{r}
 poll_data <- foreign::read.dta("data/pew_research_center_june_elect_wknd_data.dta")
