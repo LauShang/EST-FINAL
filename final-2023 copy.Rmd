@@ -9,6 +9,7 @@ library(tidyverse)
 library(purrr)
 library(invgamma)
 library(cmdstanr)
+library(posterior)
 ```
 
 
@@ -632,6 +633,10 @@ results
   
 ```{r}
 results %>% filter(state == 'idaho' | state == 'virginia')
+idaho_n = 140
+idaho_y = 14
+virginia_n = 896
+virginia_y = 36
 ```
 
 ```{r}
@@ -641,12 +646,13 @@ mod <- cmdstan_model(archivo_stan)
 mod
 ```
 
-Pasamos datos y muestreamos.
+*Para Idaho:*
 
+Pasamos datos y muestreamos.
 ```{r}
 # El método sample de un objeto CmdStanModel corre la cadena  principal de Markov del algoritmo de Monte Carlo 
 
-datos_lista <- list(n = 30, y = 19)
+datos_lista <- list(n = idaho_n, y = idaho_y)
 ajuste <- mod$sample(
   data = datos_lista, #los datos en formato json
   seed = 1234, #semilla
@@ -666,7 +672,9 @@ Si no hay problemas, podemos ver el resumen:
 ajuste$summary()
 ```
 
-**¿Los valores de $\hat{R}$ y $ESS$ son apropiados?**
+*El valor de* $\hat{R}$ *es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien* 
+
+library$ESS$ *bulk y tail también son apropiados pues son mayores a 100*
 
 https://mc-stan.org/rstan/reference/Rhat.html
 
@@ -679,6 +687,46 @@ ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
   facet_wrap(~.chain, ncol = 1)
 ```
 
+*Para Virginia:*
+
+Pasamos datos y muestreamos.
+```{r}
+# El método sample de un objeto CmdStanModel corre la cadena  principal de Markov del algoritmo de Monte Carlo 
+
+datos_lista <- list(n = virginia_n, y = virginia_y)
+ajuste <- mod$sample(
+  data = datos_lista, #los datos en formato json
+  seed = 1234, #semilla
+  chains = 4, # número de cadenas que se va a correr
+  refresh = 500) #cada cuanto se imprime las actualizaciones
+```
+
+Checamos diagnósticos:
+
+```{r}
+ajuste$cmdstan_diagnose()
+```
+
+Si no hay problemas, podemos ver el resumen:
+
+```{r}
+ajuste$summary()
+```
+
+*El valor de* $\hat{R}$ *es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien* 
+
+library$ESS$ *bulk y tail también son apropiados pues son mayores a 100*
+
+https://mc-stan.org/rstan/reference/Rhat.html
+
+Podemos ver las cadenas de la siguiente forma:
+
+```{r}
+theta_tbl <- ajuste$draws(c("theta", "theta_inicial")) %>% as_draws_df()
+ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
+  geom_line() +
+  facet_wrap(~.chain, ncol = 1)
+```
 
 
 
