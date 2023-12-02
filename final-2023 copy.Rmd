@@ -8,6 +8,7 @@ library(dplyr)
 library(tidyverse)
 library(purrr)
 library(invgamma)
+library(cmdstanr)
 ```
 
 
@@ -624,7 +625,7 @@ ggplot(sim_inicial) + geom_histogram(aes(x = theta, y = ..density..), bins = 15)
 ```{r}
 alpha4 <- alpha3 + k
 beta4 <- beta3 + (n-k)
-results <- results %>% mutate(alpha_pos = alpha3 + very_lib, beta_pos = beta3 + (tot - very_lib), media = alpha_pos / (alpha_pos + beta_pos))
+results <- results %>% mutate(alpha_pos = alpha3 + very_lib, beta_pos = beta3 + (tot - very_lib), media_posterior = alpha_pos / (alpha_pos + beta_pos))
 results
 ```
 
@@ -633,12 +634,65 @@ results
 results %>% filter(state == 'idaho' | state == 'virginia')
 ```
 
+```{r}
+#STAN
+archivo_stan <- file.path("./modelo-1.stan")
+mod <- cmdstan_model(archivo_stan)
+mod
+```
+
+Pasamos datos y muestreamos.
+
+```{r}
+# El método sample de un objeto CmdStanModel corre la cadena  principal de Markov del algoritmo de Monte Carlo 
+
+datos_lista <- list(n = 30, y = 19)
+ajuste <- mod$sample(
+  data = datos_lista, #los datos en formato json
+  seed = 1234, #semilla
+  chains = 4, # número de cadenas que se va a correr
+  refresh = 500) #cada cuanto se imprime las actualizaciones
+```
+
+Checamos diagnósticos:
+
+```{r}
+ajuste$cmdstan_diagnose()
+```
+
+Si no hay problemas, podemos ver el resumen:
+
+```{r}
+ajuste$summary()
+```
+
+**¿Los valores de $\hat{R}$ y $ESS$ son apropiados?**
+
+https://mc-stan.org/rstan/reference/Rhat.html
+
+Podemos ver las cadenas de la siguiente forma:
+
+```{r}
+theta_tbl <- ajuste$draws(c("theta", "theta_inicial")) %>% as_draws_df()
+ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
+  geom_line() +
+  facet_wrap(~.chain, ncol = 1)
+```
+
+
+
 
   - Utiliza la media posterior de cada estado como estimador puntual y repite las
   gráficas del inciso anterior.
 
 ```{r}
+ggplot(results, aes(x=tot, y=media_posterior)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
 
+ggplot(results, aes(x=vote_Obama_pct, y=media_posterior)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
 ```
 
 
