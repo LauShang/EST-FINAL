@@ -3,6 +3,12 @@ title: "Final Fundamentos 2023"
 output: html_document
 ---
 
+```{r}
+library(dplyr)
+library(tidyverse)
+```
+
+
 Un reporte con las respuestas se deberá enviar por correo electrónico a más 
 tardar el martes 5 a las 21:00 horas.
 
@@ -31,7 +37,7 @@ dicho condado y encuentra que 69 de 310 personas en la muestra han completado
 la preparatoria. Estos resultados soportan su hipótesis? (describe tu elección de
 prueba de hipótesis, valor p y conclusión).
 
-*Nos interesa probar la hipótesis de que la proporción del condado y de el resto del estado son distintas*
+*Nos interesa probar la hipótesis es que la proporció*
 
 *Por lo que bajo la hipótesis nula ambas proporciones son iguales, esto es* $\hat p_1= \hat p_2$ 
 
@@ -63,11 +69,22 @@ de cociente de verosimilitudes para probar $H_0:p=p_0$ contra $H_0:p\ne p_0$.
 
 *La función de probabilidad de la distribución multinomial es:*
 
-$P(x,\pi|n)=n!\Pi_{i=1}^{m}\frac{\pi_i^{x_i}}{x_i!}$
+$P(x,\pi|n)=n!\Pi_{i=1}^{k}\frac{p_i^{x_i}}{x_i!}=\frac{n!}{x_1!x_2!...x_k!}p_1^{x_2}p_1^{x_2}...p_k^{x_k}$
+
+*donde:* $\sum_{i=1}^kx_i=n$ *y* $\sum_{i=1}^kp_i=1$
 
 *Por lo que podemos calcular la log-verosimilitud tenemos:*
 
-$\text{log}L(\pi)=\text{log}n!\Pi_{i=1}^{m}\frac{\pi_i^{x_i}}{x_i!}=\text{log}n!+\sum_{i=1}^{m}x_i\text{log}\pi_i-\sum_{i=1}^{m}\text{log}x_i!$
+$\text{log}L(p)=\binom{n}{x_1x_2...x_n} + \sum_{i=1}^kx_i\text{log}(P_i)$
+
+*Al maximizar, debemos usar multiplicadores de Lagrange por las restricciones:*
+
+$L_1(p_i,\lambda)=L(///////)$
+
+$g$
+
+$d$
+
 
 *Con esto podemos calcular el cociente de verosimilitudes*
 
@@ -220,13 +237,126 @@ En los puntos 2.1 y 2.2 buscamos hacer inferencia del parámetro $\sigma^2$.
 verosimilitud para $\sigma^2$.  Supongamos que observamos los datos 
 `x` (en la carpeta datos), ¿Cuál es tu estimación de la varianza?
 
-```{r}
+*Primero cargamos los datos*
 
+```{r}
+load("./data/x.RData")
 ```
+
+*Luego hacemos la funcón generadora de la log verosimilitud, como es una normal utilizamos:*
+
+```{r}
+crear_log_p <- function(x){
+  log_p <- function(pars){
+    media = pars[1]
+    desv_est = pars[2]
+    # ve la ecuación del ejercicio anterior
+    z <- (x - media) / desv_est
+    log_verosim <- -(log(desv_est) + 0.5 * mean(z ^ 2))
+    log_verosim
+  }  
+  log_p
+}
+log_p <- crear_log_p(x)
+```
+
+Después optimizamos (revisamos que converja):
+
+```{r}
+res <- optim(c(0, 0.5), log_p, control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+res$convergence
+```
+
+
+Objenemos el estimador:
+```{r}
+est_mle <- tibble(parametro = c("media", "sigma"), estimador = res$par) %>% 
+  column_to_rownames(var = "parametro")
+var_cuadrada <- est_mv[2,1]^2
+var_cuadrada
+```
+
 
 
 * Aproxima el error estándar de la estimación usando __bootstrap paramétrico__ y 
 realiza un histograma de las replicaciones bootstrap.
+
+*Primero sustituimos los parámetros en una distribución del mismo tamaño con la varianza obtenida y la media = 0*
+
+```{r}
+simular_modelo <- function(n, media, sigma){
+  rnorm(n, media, sigma)
+}
+muestra_bootstrap <- simular_modelo(length(x), 
+                                    media = 0,
+                                    est_mle["sigma", "estimador"])
+head(muestra_bootstrap)
+```
+
+*Una vez que tenemos esta muestra bootstrap, optimizamos para recalcular los estimadores de máxima verosimlitud.*
+
+```{r}
+# creamos nueva verosimilitud para muestra bootstrap
+log_p_boot <- crear_log_p(muestra_bootstrap)
+# optimizamos
+res_boot <- optim(c(0, 0.5), log_p_boot, 
+  control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+res_boot$convergence
+```
+
+```{r}
+est_mle_boot <- tibble(parametro = c("media", "sigma"), estimador = res_boot$par) %>% 
+  column_to_rownames(var = "parametro")
+est_mle_boot[2,1]^2
+```
+
+*Repetimos un número grande de veces:*
+
+```{r}
+rep_boot <- function(rep, crear_log_p, est_mle, n){
+  muestra_bootstrap <- simular_modelo(length(x), 
+                               media = 0, 
+                               est_mle["sigma", "estimador"])
+  log_p_boot <- crear_log_p(muestra_bootstrap)
+  # optimizamos
+  res_boot <- optim(c(0, 0.5), log_p_boot, 
+    control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+  try(if(res_boot$convergence != 0) stop("No se alcanzó convergencia."))
+  tibble(parametro = c("media", "sigma"), estimador_boot = res_boot$par) 
+}
+reps_boot <- map_dfr(1:5000, ~ rep_boot(.x, crear_log_p, est_mle, 
+                                        n = length(muestra)), rep = ".id") 
+
+```
+
+
+*estimamos el error estándar:*
+
+
+```{r}
+error_est <- reps_boot %>% group_by(parametro) %>% 
+  summarise(ee_boot = sd(estimador_boot)) 
+error_est
+```
+
+
+
+
+
+```{r}
+est_fin <- bind_cols(est_mle, error_est) %>% 
+  mutate(across(where(is.numeric), round, 3)) %>% 
+  select(parametro, estimador, ee_boot)
+
+est_fin
+```
+```{r}
+est_fin[2,2]^2
+```
+
+
+
+
 
 2.2 Análisis bayesiano
 
@@ -234,10 +364,20 @@ realiza un histograma de las replicaciones bootstrap.
 especificando una inicial Gamma Inversa, justifica tu elección de los parámetros 
 de la distribución inicial y grafica la función de densidad.
 
+```{r}
+
+```
+
+
 * Calcula analíticamente la distribución posterior.
 
 * Realiza un histograma de simulaciones de la distribución posterior y calcula
 el error estándar de la distribución.
+
+```{r}
+
+```
+
 
 * ¿Cómo se comparan tus resultados con los de bootstrap paramétrico?
 
