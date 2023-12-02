@@ -373,12 +373,22 @@ ggplot(sigmas2, aes(x = sigma2)) +
 especificando una inicial Gamma Inversa, justifica tu elección de los parámetros 
 de la distribución inicial y grafica la función de densidad.
 
-*Para elegir los parámetros, recordamos que la media de la distribución gamma inversa es $\mu=\frac{\beta}{\alpha+1}$*
+*Para elegir los parámetros, recordamos que:*
+
+$$\alpha =\frac{[E(\sigma^2)]^2}{var(\sigma^2)}+2$$
+
+*y*
+
+$$\beta=E(\sigma^2) \Bigl\{ \frac{[E(\sigma^2)]^2}{var(\sigma^2)} +1 \Bigl\}$$
+
+*Y elegimos*  $E(\sigma^2)=130.7973$ *(el resultado obtenido con máxima verosimilitud)  y*  $var(\sigma^2)=0.9$ *(elegido experimentando para obtener un error similar que en bootstrap paramétrico)*
 
 ```{r}
+Esigma2 = var_cuadrada
+varsigma2 = 0.9
 n = 5000
-alpha = 100
-beta = sd(x)^2 * alpha + sd(x)
+alpha = Esigma2^2 / varsigma2 + 2
+beta = Esigma2 * (Esigma2^2 / varsigma2 + 1)
 mean(rinvgamma(n, alpha, beta))
 sim_inicial <- tibble(sigma2 =  rinvgamma(n, alpha, beta))
 
@@ -388,7 +398,19 @@ ggplot(sim_inicial) + geom_histogram(aes(x = sigma2, y = ..density..), bins = 15
 
 * Calcula analíticamente la distribución posterior.
 
+*La verosimilitud es:*
 
+$$L(\sigma^2|y) \propto (\sigma^2)^{n/2}e^{-\frac{n}{2\sigma^2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}$$
+
+*La priori es:*
+
+$$p(\sigma^2)=\frac{\beta^\alpha}{\Gamma(\alpha)}(\sigma^2)^{-(\alpha+1)}e^{-\beta/\sigma^2}$$
+*para* $\sigma^2>0$ 
+
+
+*Por tanto, la posterior es:*
+
+$$p(\sigma^2|y)\propto$$
 
 * Realiza un histograma de simulaciones de la distribución posterior y calcula
 el error estándar de la distribución.
@@ -426,7 +448,7 @@ sims %>% group_by(dist) %>%
 
 * ¿Cómo se comparan tus resultados con los de bootstrap paramétrico?
 
-*tiene mejores resultados el bootstrap paramétrico, probablemente la información que metimos al suponer distribuciones no sea la más adecuada*
+*fue un poco más difícil obtener un buen resultado debido a nuestra inexperiencia al elegir los valores iniciales*
 
 2.3 Supongamos que ahora buscamos hacer inferencia del parámetro 
 $\tau=log(\sigma)$, ¿cuál es el estimador de máxima verosimilitud?
@@ -500,7 +522,8 @@ verosimilitud.
   para cada estado y en el eje *y* la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas? (usa los datos *2008ElectionResult.csv*)
   
 ```{r}
-
+results = read.csv('./data/2008ElectionResult.csv')
+glimpse(results)
 ```
 
 
