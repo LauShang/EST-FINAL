@@ -410,7 +410,13 @@ $$p(\sigma^2)=\frac{\beta^\alpha}{\Gamma(\alpha)}(\sigma^2)^{-(\alpha+1)}e^{-\be
 
 *Por tanto, la posterior es:*
 
-$$p(\sigma^2|y)\propto$$
+$$p(\sigma^2|y)\propto L(\sigma^2|y) p(\sigma^2)$$
+$$\propto(\sigma^2)^{n/2}e^{-\frac{n}{2\sigma^2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}(\sigma^2)^{-(\alpha+1)}e^{-\beta/\sigma^2}$$
+$$=(\sigma^2)^{-(\alpha+\frac{n}{2}+1)}e^{-\frac{\beta+\frac{n}{2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}{\sigma^2}}$$
+*Por tanto la posteriori es una Inversa gamma con parámetros:* $\alpha_p=\alpha+\frac{n}{2}$ *y* $\beta_p=\beta + \frac{\sum_{i=1}^n(Y_i-\mu)^2}{2}$
+
+
+
 
 * Realiza un histograma de simulaciones de la distribución posterior y calcula
 el error estándar de la distribución.
@@ -442,9 +448,6 @@ f <- c(0.025, 0.975)
 sims %>% group_by(dist) %>%
   summarise(error = sd(sigma2)) 
 ```
-
-
-
 
 * ¿Cómo se comparan tus resultados con los de bootstrap paramétrico?
 
