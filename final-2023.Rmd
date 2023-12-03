@@ -188,13 +188,13 @@ set.seed(4)
 simular_modelo <- function(n, media, sigma){
   rnorm(n, media, sigma)
 }
-muestra_bootstrap <- simular_modelo(length(x), 0 ,sqrt(est_mle))
+# muestra_bootstrap <- simular_modelo(length(x), 0 ,sqrt(est_mle))
 
-log_p_boot <- crear_log_p(muestra_bootstrap)
-res_boot <- optim(c(0, 0.5), log_p_boot, 
-  control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+# log_p_boot <- crear_log_p(muestra_bootstrap)
+# res_boot <- optim(c(0, 0.5), log_p_boot, 
+#   control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
 
-est_mle_boot <- res_boot$par[2]^2
+# est_mle_boot <- res_boot$par[2]^2
 
 rep_boot <- function(rep, crear_log_p, est_mle, n){
   muestra_bootstrap <- simular_modelo(n, 0, sqrt(est_mle))
@@ -210,7 +210,7 @@ reps_boot <- map_dfr(1:5000, ~ rep_boot(.x, crear_log_p, est_mle, length(x)), re
 ee <- reps_boot %>% summarise(ee_boot = sd(estimador_boot)) 
 cat("Error estándar bootstrap: ",ee$ee_boot)
 ggplot(reps_boot, aes(x = estimador_boot)) +
-  geom_histogram(title = "Replicaciones Bootstrap",color="black", fill="gray") +facet_wrap(~parametro)
+  geom_histogram(title = "Replicaciones Bootstrap",fill="lightblue") +facet_wrap(~parametro)
 ```
 
 2.2 Análisis bayesiano
@@ -253,7 +253,7 @@ ee_posterior <- sd(posterior)
 cat("Error estándar de la posterior: ",ee_posterior)
 #plot
 ggplot(data.frame(posterior), aes(x = posterior)) +
-  geom_histogram(color="black", fill="gray")
+  geom_histogram(fill="lightblue")
 
 ```
 
@@ -273,12 +273,53 @@ ggplot(compare_data, aes(x = sigma2, fill = method)) +
 
 2.3 Supongamos que ahora buscamos hacer inferencia del parámetro 
 $\tau=log(\sigma)$, ¿cuál es el estimador de máxima verosimilitud?
-
+```{r}
+t_mle <- log(sqrt(sum(x^2)/length(x)))
+```
 * Utiliza bootstrap paramétrico para generar un intervalo de confianza del 95%
 para el parámetro $\tau$ y realiza un histograma de las replicaciones 
 bootstrap.
 
+```{r, cache=TRUE}
+set.seed(4)
+crear_log_p <- function(muestra){
+  log(sqrt(sum(muestra^2)/length(muestra)))
+}
+
+rep_boot <- function(rep, crear_log_p, est_mle, n){
+  muestra_bootstrap <- simular_modelo(n, 0, sqrt(est_mle))
+  t_mle <- crear_log_p(muestra_bootstrap)
+  tibble(parametro = "tau", estimador_boot = t_mle) 
+}
+reps_boot <- map_dfr(1:5000, ~ rep_boot(.x, crear_log_p, est_mle, length(x)), rep = ".id")
+
+intervalo <- quantile(reps_boot$estimador_boot, c(0.025, 0.975))
+print(intervalo)
+
+ee <- reps_boot %>% summarise(ee_boot = sd(estimador_boot)) %>% pull(ee_boot)
+cat("Error estándar bootstrap: ",ee)
+ggplot(reps_boot, aes(x = estimador_boot)) +
+  geom_histogram(title = "Replicaciones Bootstrap", fill="gray") +facet_wrap(~parametro)
+```
+
 * Ahora volvamos a inferencia bayesiana, calcula  un intervalo de confianza para $\tau$ y un histograma de la distribución posterior de $\tau$.
+
+```{r}
+simulacion_posterior <- function(x, alpha, beta, n){
+  alpha_posterior <- alpha + length(x) / 2
+  beta_posterior <- beta + sum(x^2) / 2
+  inv_gamma <- 1 / rgamma(n=n, shape=alpha_posterior, rate=beta_posterior)
+  posterior <- log(sqrt(inv_gamma))
+  posterior
+}
+
+posterior <- simulacion_posterior(x,alpha, beta, 5000)
+intervalo_p <- quantile(posterior, c(0.025, 0.975))
+print(intervalo_p)
+#plot
+ggplot(data.frame(posterior), aes(x = posterior)) +
+  geom_histogram(fill="lightblue")
+```
 
 ### 3. Bayesiana y regularización
 
