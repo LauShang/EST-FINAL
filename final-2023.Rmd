@@ -1,7 +1,6 @@
 ---
 title: "Final Fundamentos 2023"
-author: "Lauro Reyes Rosas 000213245"
-author: "Sara luz Valenzuela Camacho 000204535"
+author: "Lauro Reyes Rosas 000213245 & Sara Luz Valenzuela Camacho 000204535"
 date: "2023-12-05"
 output: html_document
 ---
