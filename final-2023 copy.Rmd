@@ -160,7 +160,7 @@ valor_p <- mean(lam <= lambda_obs)
 valor_p
 ```
 
-*FALTA CONCLUSIÓN*
+*Tenemos poca evidencia en contra de la hipótesis nula, por tanto los datos se comportan de acuerdo al vector de probabilidades de Mendel*
 
 
 1.3. Sean $X_1, ...X_n \sim Poisson(\lambda)$,
@@ -168,61 +168,37 @@ valor_p
 * Sea $\lambda_0>0$. ¿Cuál es la prueba Wald para
 $H_0: \lambda = \lambda_0, H_1: \lambda \neq \lambda_0$
 
-*FALTA COMPLETAR*
+$$W=\frac{\hat\lambda-\lambda_0}{\sqrt{\frac{\lambda_0}{n}}}=\sqrt{n}\frac{\hat\lambda-\lambda_0}{\sqrt{\lambda_0}}$$
+
+*donde *$\hat\lambda$ *es el valor de máxima versimilitud*
+
 
 * Si $\lambda_0=1$, $n=20$ y $\alpha = 0.05$. Simula  $X_1, ...X_n \sim Poisson(\lambda_0)$ y realiza la prueba Wald, repite 1000 veces y registra
 el porcentaje de veces que rechazas $H_0$, qué tan cerca te queda el
 error del tipo 1 de $0.05$?
 
 ```{r}
-n_volados <- 120 # número de volados
-simulados_nula <- rbinom(4000, n_volados, p = 0.5)
-lambda <- function(n, x, p_0 = 0.5){
-  # estimador de max verosim
-  p_mv <- x / n 
-  # log verosimilitud bajo mv
-  log_p_mv <- x * log(p_mv) + (n - x) * log(1 - p_mv)
-  # log verosimllitud bajo nula
-  log_p_nula <- x * log(p_0) + (n - x) * log(1 - p_0)
-  lambda <- 2*(log_p_mv - log_p_nula)
-  lambda
+lambda_0 <- 1
+n <- 20
+k <- rpois(n, 1)
+m <- 0
+
+for (x in 1:1000) {
+  k <- rpois(n, lambda_0)
+  t = sum(k)
+  lambda_mv <- t/n
+  W = sqrt(n)*(lambda_mv-lambda_0)/(sqrt(lambda_0))
+  valorP <- 2*(1 - pnorm(abs(W)))
+  if (valorP<0.05){
+    m <- m+1
+
+  }
 }
-lambda_obs <- lambda(n_volados, 75, 0.5)
-sims_tbl <- tibble(sim_x = simulados_nula) %>% 
-  mutate(lambda = map_dbl(sim_x, ~ lambda(n_volados, .x, p_0 = 0.5)))
-ggplot(sims_tbl, aes(x = lambda)) + 
-  geom_histogram(binwidth = 0.7) +
-  geom_vline(xintercept = lambda_obs, color = "red")
+print(m/1000)
 ```
 
+*Queda muy cerca, pero por encima de 0.05*
 
-
-
-```{r}
-n_muestra <- 20
-lambda_0 <-1
-muestra_1 <- rpois(n_muestra, lambda_0)
-```
-
-
-```{r}
-lambda <- function(n, x, p_0 = 0.5){
-  # estimador de max verosim
-  p_mv <- x / n 
-  # log verosimilitud bajo mv
-  log_p_mv <- x * log(p_mv) + (n - x) * log(1 - p_mv)
-  # log verosimllitud bajo nula
-  log_p_nula <- x * log(p_0) + (n - x) * log(1 - p_0)
-  lambda <- 2*(log_p_mv - log_p_nula)
-  lambda
-}
-lambda_obs <- lambda(n_volados, 75, 0.5)
-sims_tbl <- tibble(sim_x = simulados_nula) %>% 
-  mutate(lambda = map_dbl(sim_x, ~ lambda(n_volados, .x, p_0 = 0.5)))
-ggplot(sims_tbl, aes(x = lambda)) + 
-  geom_histogram(binwidth = 0.7) +
-  geom_vline(xintercept = lambda_obs, color = "red")
-```
 
 
 ## 2. Relación entre bootstrap e inferencia bayesiana
@@ -308,7 +284,7 @@ Objenemos el estimador:
 ```{r}
 est_mle <- tibble(parametro = c("media", "sigma"), estimador = res$par) %>% 
   column_to_rownames(var = "parametro")
-var_cuadrada <- est_mv[2,1]^2
+var_cuadrada <- est_mle[2,1]^2
 var_cuadrada
 ```
 
@@ -491,7 +467,7 @@ sims %>% group_by(dist) %>%
 $\tau=log(\sigma)$, ¿cuál es el estimador de máxima verosimilitud?
 
 ```{r}
-var_log <- log(est_mv[2,1])
+var_log <- log(est_mle[2,1])
 var_log
 ```
 
@@ -588,7 +564,7 @@ ggplot(dat_verosim, aes(x = x, y = log_prob)) + geom_line() +
 ```
 
 ```{r}
-solucion <- optim(p = 0.05, log_verosimilitud, control = list(fnscale = -1))
+solucion <- optim(p = 0.05, log_verosimilitudBI, control = list(fnscale = -1))
 solucion$par
 ```
 
