@@ -4,6 +4,7 @@ output: html_document
 ---
 
 ```{r}
+set.seed(3341)
 library(dplyr)
 library(tidyverse)
 library(purrr)
@@ -41,9 +42,9 @@ dicho condado y encuentra que 69 de 310 personas en la muestra han completado
 la preparatoria. Estos resultados soportan su hipótesis? (describe tu elección de
 prueba de hipótesis, valor p y conclusión).
 
-*Nos interesa probar la hipótesis es que la proporció*
+*Nos interesa probar la hipótesis alternativa de que la proporción del condado es menor que la del estado (una cola)* $\hat p_{condado}<\hat p_{estado}$
 
-*Por lo que bajo la hipótesis nula ambas proporciones son iguales, esto es* $\hat p_1= \hat p_2$ 
+*Por lo que bajo la hipótesis nula ambas proporciones son iguales, esto es* $\hat p_{condado}=\hat p_{estado}$ 
 
 
 ```{r}
@@ -58,10 +59,11 @@ w
 ```
 
 ```{r}
-valor_p <- 2 * (1 - pnorm(abs(w)))
+valor_p <-  (1 - pnorm(abs(w)))
 valor_p
 ```
 
+*Dado que es mayor a 0.05, se rechaza la hipótesis alternativa, ya que no hay mucha evidencia en contra de la hipótesis nula*
 
 1.2 Mendel criaba chícharos de semillas lisas amarillas y de semillas
 corrugadas verdes. Éstas daban lugar a 4 tipos de descendientes: amarrillas lisas, amarillas corrugadas, verdes lisas y verdes corrugadas. El número de cada una
@@ -73,26 +75,34 @@ de cociente de verosimilitudes para probar $H_0:p=p_0$ contra $H_0:p\ne p_0$.
 
 *La función de probabilidad de la distribución multinomial es:*
 
-$P(x,\pi|n)=n!\Pi_{i=1}^{k}\frac{p_i^{x_i}}{x_i!}=\frac{n!}{x_1!x_2!...x_k!}p_1^{x_2}p_1^{x_2}...p_k^{x_k}$
+$$P(x|\pi,n)=\binom{n!}{x_1!x_2!...x_m!}\Pi_{i=1}^{m}\pi_i^{x_i}=n!\Pi_{i=1}^{m}\frac{\pi_i^{x_i}}{x_i!}$$
 
-*donde:* $\sum_{i=1}^kx_i=n$ *y* $\sum_{i=1}^kp_i=1$
+*donde:* $\sum_{i=1}^kx_i=n$ *y* $\sum_{i=1}^k\pi_i=1$
 
 *Por lo que podemos calcular la log-verosimilitud tenemos:*
 
-$\text{log}L(p)=\binom{n}{x_1x_2...x_n} + \sum_{i=1}^kx_i\text{log}(P_i)$
+$$\text{log}L(\pi)=\text{log}\Big(n!\Pi_{i=1}^{m}\frac{\pi_i^{x_i}}{x_i!}\Big)=\text{log}n!+\sum_{i=1}^mx_i\text{log}\pi_i-\sum_{i=1}^m\text{log}x_i!$$
 
-*Al maximizar, debemos usar multiplicadores de Lagrange por las restricciones:*
+*Para encontrar el máximo, debemos usar multiplicadores de Lagrange por las restricciones:*
 
-$L_1(p_i,\lambda)=L(///////)$
+$$\mathcal{L}(\mathbf{\pi},\lambda)=\text{log}L(\pi)+\lambda(1-\sum_{i=1}^m\pi_i)$$
+*Derivando con respecto de *$\pi_i$
 
-$g$
+$$\frac{\partial}{\partial\pi_i}\mathcal{L}(\mathbf{\pi},\lambda)=\frac{\partial}{\partial\pi_i}\text{log}L(\mathbf{\pi})+\frac{\partial}{\partial\pi_i}\lambda(1-\sum_{i=1}^m\pi_i) =\frac{\partial}{\partial\pi_i}\text{log}L(\mathbf{\pi})-\lambda$$
+$$\frac{\partial}{\partial\pi_i}\mathcal{L}(\mathbf{\pi},\lambda)=\frac{\partial}{\partial\pi_i}\Big(\text{log}n!+\sum_{i=1}^mx_i\text{log}\pi_i-\sum_{i=1}^m\text{log}x_i!\Big)-\lambda=\frac{x_i}{\pi_i}-\lambda$$
+*Igualando a cero tenemos:*
 
-$d$
+$$\pi_i=\frac{x_i}{\lambda}$$
+*Para resolver para *$\lambda$, *sumamos por ambos lados*
 
+$$1=\sum_{i=1}^m\pi_i=\sum_{i=1}^m\frac{x_i}{\lambda}=\frac{1}{\lambda}\sum_{i=1}^mx_i=\frac{1}{\lambda}n$$
+*Por tanto* $\lambda=n$, *y la máxima verosimilitud es:*
+
+$$\pi_i=\frac{x_i}{n}$$
 
 *Con esto podemos calcular el cociente de verosimilitudes*
 
-$\lambda=2\text{log}\left( \frac{L(\hat\theta)}{L(\theta_0)} \right)$
+$$\lambda=2\text{log}\left( \frac{L(\hat\theta)}{L(\theta_0)} \right)$$
 
 
 ```{r}
@@ -113,31 +123,44 @@ lambda <- function(n, x, p){
   lambda
 }
 lambda_obs <- lambda(n, x, p_0)
+lambda_obs
+```
 
+
+```{r}
 df <- data.frame(t(simulados_nula))
 colnames(df) <- c('s1','s2','s3','s4') 
 
-glimpse(df)
+#glimpse(df)
 lam <-c(1:1000)
 for (i in 1:1000) {
    xs = c(df[i,1],df[i,2],df[i,3],df[i,4])
-   print(lambda(n, xs, p_0))
-   print(xs)
+#   print(lambda(n, xs, p_0))
+#   print(xs)
    lam[i] <-  lambda(n, xs, p_0)
 }
 
-#df[lambda]=lam
+df<-tibble(lam)
 
 #ggplot(lam, aes(x = lam)) #+ 
 #  geom_histogram(binwidth = 0.7) +
 #  geom_vline(xintercept = 2.92, colour = "red")
 ```
 
+
 ```{r}
-valor_p <- mean(lam >= lambda_obs)
+ggplot(df, aes(x = lam)) +
+  geom_histogram() +
+  geom_vline(xintercept = lambda_obs, colour = "red")
+```
+
+
+```{r}
+valor_p <- mean(lam <= lambda_obs)
 valor_p
 ```
 
+*FALTA CONCLUSIÓN*
 
 
 1.3. Sean $X_1, ...X_n \sim Poisson(\lambda)$,
@@ -145,52 +168,61 @@ valor_p
 * Sea $\lambda_0>0$. ¿Cuál es la prueba Wald para
 $H_0: \lambda = \lambda_0, H_1: \lambda \neq \lambda_0$
 
+*FALTA COMPLETAR*
+
 * Si $\lambda_0=1$, $n=20$ y $\alpha = 0.05$. Simula  $X_1, ...X_n \sim Poisson(\lambda_0)$ y realiza la prueba Wald, repite 1000 veces y registra
 el porcentaje de veces que rechazas $H_0$, qué tan cerca te queda el
 error del tipo 1 de $0.05$?
-```{r}
-set.seed(3341)
-n_muestra <- 20
-muestra_1 <- rnorm(n_muestra, 1)
-```
-
 
 ```{r}
-crear_log_p <- function(x){
-  # crear log verosim para dos muestras normales independientes.
-  log_p <- function(params){
-    lamb <- params[1]
-    log_vero <- dpois(x, lamb, log = TRUE) %>% sum
-    log_vero
-  }
-}
-lambda_calc <- function(muestra, crear_log_p){
-  log_p <- crear_log_p(muestra)
-  res <- optim(c(0), log_p, control = list(fnscale = -1))
-  lambda_mv <- log_p(res$par)
-  lambda_nula <- log_p(1)
-  lambda <- 2 * (lambda_mv - lambda_nula)
+n_volados <- 120 # número de volados
+simulados_nula <- rbinom(4000, n_volados, p = 0.5)
+lambda <- function(n, x, p_0 = 0.5){
+  # estimador de max verosim
+  p_mv <- x / n 
+  # log verosimilitud bajo mv
+  log_p_mv <- x * log(p_mv) + (n - x) * log(1 - p_mv)
+  # log verosimllitud bajo nula
+  log_p_nula <- x * log(p_0) + (n - x) * log(1 - p_0)
+  lambda <- 2*(log_p_mv - log_p_nula)
   lambda
 }
-lambda <- lambda_calc(muestra_1, crear_log_p)
-lambda
+lambda_obs <- lambda(n_volados, 75, 0.5)
+sims_tbl <- tibble(sim_x = simulados_nula) %>% 
+  mutate(lambda = map_dbl(sim_x, ~ lambda(n_volados, .x, p_0 = 0.5)))
+ggplot(sims_tbl, aes(x = lambda)) + 
+  geom_histogram(binwidth = 0.7) +
+  geom_vline(xintercept = lambda_obs, color = "red")
 ```
 
-```{r}
-sims_nula <- map(1:10000, ~ rpois(n_muestra, 1))
-lambda_nula_sim <- map_dbl(sims_nula, ~ lambda_calc(.x, crear_log_p))
-tibble(lambda = lambda_nula_sim) %>% 
-  ggplot(aes(x = lambda)) + geom_histogram() +
-  geom_vline(xintercept = lambda, colour = "red") 
-```
 
 
 
 ```{r}
-valor_p <- mean(lambda_nula_sim >= lambda)
-valor_p
+n_muestra <- 20
+lambda_0 <-1
+muestra_1 <- rpois(n_muestra, lambda_0)
 ```
 
+
+```{r}
+lambda <- function(n, x, p_0 = 0.5){
+  # estimador de max verosim
+  p_mv <- x / n 
+  # log verosimilitud bajo mv
+  log_p_mv <- x * log(p_mv) + (n - x) * log(1 - p_mv)
+  # log verosimllitud bajo nula
+  log_p_nula <- x * log(p_0) + (n - x) * log(1 - p_0)
+  lambda <- 2*(log_p_mv - log_p_nula)
+  lambda
+}
+lambda_obs <- lambda(n_volados, 75, 0.5)
+sims_tbl <- tibble(sim_x = simulados_nula) %>% 
+  mutate(lambda = map_dbl(sim_x, ~ lambda(n_volados, .x, p_0 = 0.5)))
+ggplot(sims_tbl, aes(x = lambda)) + 
+  geom_histogram(binwidth = 0.7) +
+  geom_vline(xintercept = lambda_obs, color = "red")
+```
 
 
 ## 2. Relación entre bootstrap e inferencia bayesiana
