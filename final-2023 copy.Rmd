@@ -1,0 +1,768 @@
+---
+title: "Final Fundamentos 2023"
+output: html_document
+---
+
+```{r}
+set.seed(3341)
+library(dplyr)
+library(tidyverse)
+library(purrr)
+library(invgamma)
+library(cmdstanr)
+library(posterior)
+```
+
+
+Un reporte con las respuestas se deberá enviar por correo electrónico a más 
+tardar el martes 5 a las 21:00 horas.
+
+Instrucciones: 
+
+- En las siguientes preguntas describe tus procedimientos y escribe las
+respuestas explícitamente (que no haya necesidad de correr código para 
+obtenerlas). 
+
+- Incluye el código.
+
+- No está permitido discutir el exámen fuera de su equipo.
+
+- Para dudas (que no deben incluir info. de la respuesta) se preguntará en el 
+canvas del grupo.
+
+- Consideren el material de visualización al hacer sus gráficas y reportar sus
+resultados.
+
+## 1. Pruebas de hipótesis
+
+1.1 De acuerdo a una encuesta en EUA, 26% de los residentes adultos de Illinois han 
+terminado la preparatoria. Un investigador sospecha que este porcentaje es
+menor en un condado particular del estado. Obtiene una muestra aleatoria de 
+dicho condado y encuentra que 69 de 310 personas en la muestra han completado
+la preparatoria. Estos resultados soportan su hipótesis? (describe tu elección de
+prueba de hipótesis, valor p y conclusión).
+
+*Nos interesa probar la hipótesis alternativa de que la proporción del condado es menor que la del estado (una cola)* $\hat p_{condado}<\hat p_{estado}$
+
+*Por lo que bajo la hipótesis nula ambas proporciones son iguales, esto es* $\hat p_{condado}=\hat p_{estado}$ 
+
+
+```{r}
+p_hat <- 69 / 310
+ee <- sqrt(p_hat * (1 - p_hat) / 310)
+```
+
+
+```{r}
+w <- (p_hat - 0.26) / ee
+w
+```
+
+```{r}
+valor_p <-  (1 - pnorm(abs(w)))
+valor_p
+```
+
+*Dado que es mayor a 0.05, se rechaza la hipótesis alternativa, ya que no hay mucha evidencia en contra de la hipótesis nula*
+
+1.2 Mendel criaba chícharos de semillas lisas amarillas y de semillas
+corrugadas verdes. Éstas daban lugar a 4 tipos de descendientes: amarrillas lisas, amarillas corrugadas, verdes lisas y verdes corrugadas. El número de cada una
+es multinomial con parámetro $p=(p_1, p_2, p_3, p_4)$. De acuerdo a su teoría de
+herencia este vector de probabilidades es:
+$$p=(9/16,3/16,3/16,1/16)$$
+A lo largo de $n=556$ experimentos observó $x=(315,101,108,32)$. Utiliza la prueba
+de cociente de verosimilitudes para probar $H_0:p=p_0$ contra $H_0:p\ne p_0$.
+
+*La función de probabilidad de la distribución multinomial es:*
+
+$$P(x|\pi,n)=\binom{n!}{x_1!x_2!...x_m!}\Pi_{i=1}^{m}\pi_i^{x_i}=n!\Pi_{i=1}^{m}\frac{\pi_i^{x_i}}{x_i!}$$
+
+*donde:* $\sum_{i=1}^kx_i=n$ *y* $\sum_{i=1}^k\pi_i=1$
+
+*Por lo que podemos calcular la log-verosimilitud tenemos:*
+
+$$\text{log}L(\pi)=\text{log}\Big(n!\Pi_{i=1}^{m}\frac{\pi_i^{x_i}}{x_i!}\Big)=\text{log}n!+\sum_{i=1}^mx_i\text{log}\pi_i-\sum_{i=1}^m\text{log}x_i!$$
+
+*Para encontrar el máximo, debemos usar multiplicadores de Lagrange por las restricciones:*
+
+$$\mathcal{L}(\mathbf{\pi},\lambda)=\text{log}L(\pi)+\lambda(1-\sum_{i=1}^m\pi_i)$$
+*Derivando con respecto de *$\pi_i$
+
+$$\frac{\partial}{\partial\pi_i}\mathcal{L}(\mathbf{\pi},\lambda)=\frac{\partial}{\partial\pi_i}\text{log}L(\mathbf{\pi})+\frac{\partial}{\partial\pi_i}\lambda(1-\sum_{i=1}^m\pi_i) =\frac{\partial}{\partial\pi_i}\text{log}L(\mathbf{\pi})-\lambda$$
+$$\frac{\partial}{\partial\pi_i}\mathcal{L}(\mathbf{\pi},\lambda)=\frac{\partial}{\partial\pi_i}\Big(\text{log}n!+\sum_{i=1}^mx_i\text{log}\pi_i-\sum_{i=1}^m\text{log}x_i!\Big)-\lambda=\frac{x_i}{\pi_i}-\lambda$$
+*Igualando a cero tenemos:*
+
+$$\pi_i=\frac{x_i}{\lambda}$$
+*Para resolver para *$\lambda$, *sumamos por ambos lados*
+
+$$1=\sum_{i=1}^m\pi_i=\sum_{i=1}^m\frac{x_i}{\lambda}=\frac{1}{\lambda}\sum_{i=1}^mx_i=\frac{1}{\lambda}n$$
+*Por tanto* $\lambda=n$, *y la máxima verosimilitud es:*
+
+$$\pi_i=\frac{x_i}{n}$$
+
+*Con esto podemos calcular el cociente de verosimilitudes*
+
+$$\lambda=2\text{log}\left( \frac{L(\hat\theta)}{L(\theta_0)} \right)$$
+
+
+```{r}
+p_0 <- c(9/16,3/16,3/16,1/16)
+n <- 556
+x <- c(315,101,108,32)
+
+simulados_nula <- rmultinom(1000, size = 556, prob = c(9/16,3/16,3/16,1/16))
+
+lambda <- function(n, x, p){
+  # estimador de max verosim
+  p_mv <- c(x[1]/n, x[2]/n, x[3]/n, x[4]/n)
+  # log verosimilitud bajo mv
+  log_p_mv <- ( x[1]*log(p_mv[1]) + x[2]*log(p_mv[2]) + x[3]*log(p_mv[3]) + x[4]*log(p_mv[4]) ) - (log(x[1]) + log(x[2]) + log(x[3]) + log(x[4]) )
+  # log verosimllitud bajo nula
+  log_p_nula <- ( x[1]*log(p[1]) + x[2]*log(p[2]) + x[3]*log(p[3]) + x[4]*log(p[4]) ) - (log(x[1]) + log(x[2]) + log(x[3]) + log(x[4]) )
+  lambda <- 2*(log_p_mv - log_p_nula)
+  lambda
+}
+lambda_obs <- lambda(n, x, p_0)
+lambda_obs
+```
+
+
+```{r}
+df <- data.frame(t(simulados_nula))
+colnames(df) <- c('s1','s2','s3','s4') 
+
+#glimpse(df)
+lam <-c(1:1000)
+for (i in 1:1000) {
+   xs = c(df[i,1],df[i,2],df[i,3],df[i,4])
+#   print(lambda(n, xs, p_0))
+#   print(xs)
+   lam[i] <-  lambda(n, xs, p_0)
+}
+
+df<-tibble(lam)
+
+#ggplot(lam, aes(x = lam)) #+ 
+#  geom_histogram(binwidth = 0.7) +
+#  geom_vline(xintercept = 2.92, colour = "red")
+```
+
+
+```{r}
+ggplot(df, aes(x = lam)) +
+  geom_histogram() +
+  geom_vline(xintercept = lambda_obs, colour = "red")
+```
+
+
+```{r}
+valor_p <- mean(lam <= lambda_obs)
+valor_p
+```
+
+*Tenemos poca evidencia en contra de la hipótesis nula, por tanto los datos se comportan de acuerdo al vector de probabilidades de Mendel*
+
+
+1.3. Sean $X_1, ...X_n \sim Poisson(\lambda)$,
+
+* Sea $\lambda_0>0$. ¿Cuál es la prueba Wald para
+$H_0: \lambda = \lambda_0, H_1: \lambda \neq \lambda_0$
+
+$$W=\frac{\hat\lambda-\lambda_0}{\sqrt{\frac{\lambda_0}{n}}}=\sqrt{n}\frac{\hat\lambda-\lambda_0}{\sqrt{\lambda_0}}$$
+
+*donde *$\hat\lambda$ *es el valor de máxima versimilitud*
+
+
+* Si $\lambda_0=1$, $n=20$ y $\alpha = 0.05$. Simula  $X_1, ...X_n \sim Poisson(\lambda_0)$ y realiza la prueba Wald, repite 1000 veces y registra
+el porcentaje de veces que rechazas $H_0$, qué tan cerca te queda el
+error del tipo 1 de $0.05$?
+
+```{r}
+lambda_0 <- 1
+n <- 20
+k <- rpois(n, 1)
+m <- 0
+
+for (x in 1:1000) {
+  k <- rpois(n, lambda_0)
+  t = sum(k)
+  lambda_mv <- t/n
+  W = sqrt(n)*(lambda_mv-lambda_0)/(sqrt(lambda_0))
+  valorP <- 2*(1 - pnorm(abs(W)))
+  if (valorP<0.05){
+    m <- m+1
+
+  }
+}
+print(m/1000)
+```
+
+*Queda muy cerca, pero por encima de 0.05*
+
+
+
+## 2. Relación entre bootstrap e inferencia bayesiana
+
+Consideremos el caso en que tenemos una única observación $x$ proveniente de 
+una distribución normal
+
+$$x \sim N(\theta, 1)$$
+
+Supongamos ahora que elegimos una distribución inicial Normal.
+
+$$\theta \sim N(0, \tau)$$ 
+
+dando lugar a la distribución posterior (como vimos en la tarea)
+
+$$\theta|x \sim N\bigg(\frac{x}{1 + 1/\tau}, \frac{1}{1+1/\tau}\bigg)$$ 
+
+Ahora, entre mayor $\tau$, más se concentra la posterior en el estimador de
+máxima verosimilitud $\hat{\theta}=x$. En el límite, cuando $\tau \to \infty$
+obtenemos una inicial no-informativa (constante) y la distribución posterior
+
+$$\theta|x \sim N(x,1)$$
+
+Esta posterior coincide con la distribución de bootstrap paramétrico en que generamos valores $x^*$ de $N(x,1)$, donde $x$ es el estimador de máxima
+verosimilitud.
+
+Lo anterior se cumple debido a que utilizamos un ejemplo Normal pero también 
+se cumple aproximadamente en otros casos, lo que conlleva a una correspondencia
+entre el bootstrap paramétrico y la inferencia bayesiana. En este caso, la
+distribución bootstrap representa (aproximadamente) una distribución posterior 
+no-informartiva del parámetro de interés. Mediante la perturbación en los datos
+el bootstrap aproxima el efecto bayesiano de perturbar los parámetros con la
+ventaja de ser más simple de implementar (en muchos casos).  
+*Los detalles se pueden leer en _The Elements of Statistical Learning_ de 
+Hastie y Tibshirani.
+
+Comparemos los métodos en otro problema con el fin de apreciar la similitud en 
+los procedimientos: 
+
+Supongamos $x_1,...,x_n \sim N(0, \sigma^2)$, es decir, los datos provienen de 
+una distribución con media cero y varianza desconocida.
+
+En los puntos 2.1 y 2.2 buscamos hacer inferencia del parámetro $\sigma^2$.
+
+2.1 Bootstrap paramétrico.
+
+* Escribe la función de log-verosimilitud y calcula el estimador de máxima 
+verosimilitud para $\sigma^2$.  Supongamos que observamos los datos 
+`x` (en la carpeta datos), ¿Cuál es tu estimación de la varianza?
+
+*Primero cargamos los datos*
+
+```{r}
+load("./data/x.RData")
+```
+
+*Luego hacemos la funcón generadora de la log verosimilitud, como es una normal utilizamos:*
+
+```{r}
+crear_log_p <- function(x){
+  log_p <- function(pars){
+    media = pars[1]
+    desv_est = pars[2]
+    # ve la ecuación del ejercicio anterior
+    z <- (x - media) / desv_est
+    log_verosim <- -(log(desv_est) + 0.5 * mean(z ^ 2))
+    log_verosim
+  }  
+  log_p
+}
+log_p <- crear_log_p(x)
+```
+
+Después optimizamos (revisamos que converja):
+
+```{r}
+res <- optim(c(0, 0.5), log_p, control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+res$convergence
+```
+
+
+Objenemos el estimador:
+```{r}
+est_mle <- tibble(parametro = c("media", "sigma"), estimador = res$par) %>% 
+  column_to_rownames(var = "parametro")
+var_cuadrada <- est_mle[2,1]^2
+var_cuadrada
+```
+
+
+
+* Aproxima el error estándar de la estimación usando __bootstrap paramétrico__ y 
+realiza un histograma de las replicaciones bootstrap.
+
+*Primero sustituimos los parámetros en una distribución del mismo tamaño con la varianza obtenida y la media = 0*
+
+```{r}
+simular_modelo <- function(n, media, sigma){
+  rnorm(n, media, sigma)
+}
+muestra_bootstrap <- simular_modelo(length(x), 
+                                    media = 0,
+                                    est_mle["sigma", "estimador"])
+head(muestra_bootstrap)
+```
+
+*Una vez que tenemos esta muestra bootstrap, optimizamos para recalcular los estimadores de máxima verosimlitud.*
+
+```{r}
+# creamos nueva verosimilitud para muestra bootstrap
+log_p_boot <- crear_log_p(muestra_bootstrap)
+# optimizamos
+res_boot <- optim(c(0, 0.5), log_p_boot, 
+  control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+res_boot$convergence
+```
+
+```{r}
+est_mle_boot <- tibble(parametro = c("media", "sigma"), estimador = res_boot$par) %>% 
+  column_to_rownames(var = "parametro")
+est_mle_boot[2,1]^2
+```
+
+*Repetimos un número grande de veces:*
+
+```{r}
+rep_boot <- function(rep, crear_log_p, est_mle, n){
+  muestra_bootstrap <- simular_modelo(length(x), 
+                               media = 0, 
+                               est_mle["sigma", "estimador"])
+  log_p_boot <- crear_log_p(muestra_bootstrap)
+  # optimizamos
+  res_boot <- optim(c(0, 0.5), log_p_boot, 
+    control = list(fnscale = -1, maxit = 1000), method = "Nelder-Mead")
+  try(if(res_boot$convergence != 0) stop("No se alcanzó convergencia."))
+  tibble(parametro = c("media", "sigma"), estimador_boot = res_boot$par) 
+}
+reps_boot <- map_dfr(1:5000, ~ rep_boot(.x, crear_log_p, est_mle, 
+                                        n = length(muestra)), rep = ".id") 
+
+```
+
+
+*estimamos el error estándar:*
+
+
+```{r}
+error_est <- reps_boot %>% group_by(parametro) %>% 
+  summarise(ee_boot = sd(estimador_boot)) 
+error_est
+```
+
+
+
+
+
+```{r}
+est_fin <- bind_cols(est_mle, error_est) %>% 
+  mutate(across(where(is.numeric), round, 3)) %>% 
+  select(parametro, estimador, ee_boot)
+
+est_fin
+```
+```{r}
+est_fin[2,2]^2
+```
+
+
+```{r}
+sigmas2 <- reps_boot %>% filter(parametro %in% c("sigma")) %>% mutate(sigma2 = estimador_boot^2)
+ggplot(sigmas2, aes(x = sigma2)) +
+  geom_histogram() 
+```
+
+
+
+
+
+2.2 Análisis bayesiano
+
+* Continuamos con el problema de hacer inferencia de $\sigma^2$. Comienza 
+especificando una inicial Gamma Inversa, justifica tu elección de los parámetros 
+de la distribución inicial y grafica la función de densidad.
+
+*Para elegir los parámetros, recordamos que:*
+
+$$\alpha =\frac{[E(\sigma^2)]^2}{var(\sigma^2)}+2$$
+
+*y*
+
+$$\beta=E(\sigma^2) \Bigl\{ \frac{[E(\sigma^2)]^2}{var(\sigma^2)} +1 \Bigl\}$$
+
+*Y elegimos*  $E(\sigma^2)=130.7973$ *(el resultado obtenido con máxima verosimilitud)  y*  $var(\sigma^2)=0.9$ *(elegido experimentando para obtener un error similar que en bootstrap paramétrico)*
+
+```{r}
+Esigma2 = var_cuadrada
+varsigma2 = 0.9
+n = 5000
+alpha = Esigma2^2 / varsigma2 + 2
+beta = Esigma2 * (Esigma2^2 / varsigma2 + 1)
+mean(rinvgamma(n, alpha, beta))
+sim_inicial <- tibble(sigma2 =  rinvgamma(n, alpha, beta))
+
+ggplot(sim_inicial) + geom_histogram(aes(x = sigma2, y = ..density..), bins = 15)
+```
+
+
+* Calcula analíticamente la distribución posterior.
+
+*La verosimilitud es:*
+
+$$L(\sigma^2|y) \propto (\sigma^2)^{n/2}e^{-\frac{n}{2\sigma^2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}$$
+
+*La priori es:*
+
+$$p(\sigma^2)=\frac{\beta^\alpha}{\Gamma(\alpha)}(\sigma^2)^{-(\alpha+1)}e^{-\beta/\sigma^2}$$
+*para* $\sigma^2>0$ 
+
+
+*Por tanto, la posterior es:*
+
+$$p(\sigma^2|y)\propto L(\sigma^2|y) p(\sigma^2)$$
+$$\propto(\sigma^2)^{n/2}e^{-\frac{n}{2\sigma^2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}(\sigma^2)^{-(\alpha+1)}e^{-\beta/\sigma^2}$$
+$$=(\sigma^2)^{-(\alpha+\frac{n}{2}+1)}e^{-\frac{\beta+\frac{n}{2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}{\sigma^2}}$$
+*Por tanto la posteriori es una Inversa gamma con parámetros:* $\alpha_p=\alpha+\frac{n}{2}$ *y* $\beta_p=\beta + \frac{\sum_{i=1}^n(Y_i-\mu)^2}{2}$
+
+
+
+
+* Realiza un histograma de simulaciones de la distribución posterior y calcula
+el error estándar de la distribución.
+
+```{r}
+n = length(x)
+b = (sd(x)^2)*n
+mu = mean(x)
+
+alpha2 = alpha + n/2
+beta2 = beta +b/2
+
+sim_posterior <-  tibble(sigma2 = rinvgamma(n, alpha2, beta2))
+
+```
+
+
+```{r}
+sim_inicial <- sim_inicial %>% mutate(dist = "inicial")
+sim_posterior <- sim_posterior %>% mutate(dist = "posterior")
+sims <- bind_rows(sim_inicial, sim_posterior)
+ggplot(sims, aes(x = sigma2, fill = dist)) +
+  geom_histogram(aes(x = sigma2), bins = 30, alpha = 0.5, position = "identity")
+```
+
+
+```{r}
+f <- c(0.025, 0.975)
+sims %>% group_by(dist) %>%
+  summarise(error = sd(sigma2)) 
+```
+
+* ¿Cómo se comparan tus resultados con los de bootstrap paramétrico?
+
+*fue un poco más difícil obtener un buen resultado debido a nuestra inexperiencia al elegir los valores iniciales*
+
+2.3 Supongamos que ahora buscamos hacer inferencia del parámetro 
+$\tau=log(\sigma)$, ¿cuál es el estimador de máxima verosimilitud?
+
+```{r}
+var_log <- log(est_mle[2,1])
+var_log
+```
+
+
+* Utiliza bootstrap paramétrico para generar un intervalo de confianza del 95%
+para el parámetro $\tau$ y realiza un histograma de las replicaciones 
+bootstrap.
+
+```{r}
+logsig <- reps_boot %>% filter(parametro %in% c("sigma")) %>% mutate(lsig = log(estimador_boot))
+quantile(logsig$lsig, c(0.025, 0.975)) %>% round(2)
+```
+
+
+```{r}
+logsig <- reps_boot %>% filter(parametro %in% c("sigma")) %>% mutate(lsig = log(estimador_boot))
+ggplot(logsig, aes(x = lsig)) +
+  geom_histogram() 
+```
+
+
+
+* Ahora volvamos a inferencia bayesiana, calcula  un intervalo de confianza para $\tau$ y un histograma de la distribución posterior de $\tau$.
+
+
+```{r}
+sp_log <- sim_posterior %>% mutate(logSigma = log(sqrt(sigma2)))
+si_log <- sim_inicial %>% mutate(logSigma = log(sqrt(sigma2)))
+```
+
+
+```{r}
+sims2 <- bind_rows(si_log, sp_log)
+ggplot(sims2, aes(x = logSigma, fill = dist)) +
+  geom_histogram(aes(x = logSigma), bins = 30, alpha = 0.5, position = "identity")
+```
+
+```{r}
+quantile(sp_log$logSigma, c(0.025, 0.975)) %>% round(2)
+```
+
+
+
+
+
+### 3. Bayesiana y regularización
+
+Los datos *pew_research_center_june_elect_wknd_data.dta* tienen información de 
+encuestas realizadas durante la campaña presidencial 2008 de EUA.
+
+```{r}
+poll_data <- foreign::read.dta("data/pew_research_center_june_elect_wknd_data.dta")
+#glimpse(poll_data)
+```
+
+* Estima el porcentaje de la población de cada estado (excluyendo Alaska, Hawai, 
+y DC)  que se considera *very liberal*, utilizando el estimador de máxima 
+verosimilitud.
+
+*Considerando una distribución binomial, tenemos que el estimador de máxima verosimilitud es:* $\hat p\frac{k}{n}$
+
+```{r}
+datos1 <- poll_data %>% select(ideo,state) %>% mutate(binary=ifelse(is.na(ideo), ideo, ideo == "very liberal"))
+datos1 %>% group_by(ideo) %>% summarise(n())
+```
+
+```{r}
+n = nrow(datos1)
+k = 1470
+p_hat = k / n
+p_hat
+```
+
+*otra forma de calcularlo es:*
+
+```{r}
+crear_log_bi <- function(n,k){
+  log_verosimilitud <- function(p){
+  k * log(p) + (n-k) * log(1-p)
+  }
+  log_verosimilitud
+}
+```
+
+
+
+```{r}
+log_verosimilitudBI <- crear_log_bi(n,k)
+
+dat_verosim <- tibble(x = seq(0,1, 0.01)) %>% mutate(log_prob = map_dbl(x, log_verosimilitudBI))
+ggplot(dat_verosim, aes(x = x, y = log_prob)) + geom_line() +
+  geom_vline(xintercept = p_hat, color = "red") +
+  xlab("p")
+```
+
+```{r}
+solucion <- optim(p = 0.05, log_verosimilitudBI, control = list(fnscale = -1))
+solucion$par
+```
+
+
+
+  - Grafica en el eje *x* el número de encuestas para cada estado y en el eje *y* 
+  la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas?  
+  
+```{r}
+very_lib <- datos1 %>%  filter(ideo == "very liberal") %>% group_by(state,ideo) %>% summarise(n())
+all_enc <- datos1 %>% group_by(state) %>% summarise(n())
+very_lib <- very_lib %>% inner_join(all_enc,by="state") %>% rename("very_lib" = "n().x", "tot" = "n().y") %>% mutate(max_ver = very_lib/tot)
+
+ggplot(very_lib, aes(x=tot, y=max_ver)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
+
+```
+
+*Con forme aumenta el número de encuestas, el valor de máxima verosimilitud se acerca al calculado para toda la base.*
+
+  - Grafica en el eje *x* el porcentaje de votos que obtuvo Obama en la elección
+  para cada estado y en el eje *y* la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas? (usa los datos *2008ElectionResult.csv*)
+  
+```{r}
+results = read.csv('./data/2008ElectionResult.csv')
+results <- results %>% select(vote_Obama_pct,state) %>% mutate(state = tolower(state) )
+#vote_Obama_pct
+#state
+results <- very_lib %>% inner_join(results,by="state") 
+glimpse(results)
+```
+
+
+```{r}
+ggplot(results, aes(x=vote_Obama_pct, y=max_ver)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
+```
+
+*Con forme aumenta el número de votos para Obama, el valor de máxima verosimilitud se acerca al calculado para toda la base.*
+
+
+* Estima el mismo porcentaje (*very liberal*) usando inferencia bayesiana, en particular
+la familia conjugada beta-binomial. Deberás estimar la proporción de manera 
+independiente para cada estado, sin embargo, utilizarás la misma inicial a lo
+largo de todos: $Beta(8,160)$.
+
+  - Simula de la distribución incial y describe.
+  
+*nos conviene usar una inicial Beta debido a que buscamos estimar una proporción* $\theta$ *de una población*
+
+*y con los parámetros propuestos en el ejercicio, el promedio se acerca al valor de máxima verosimilitud*
+
+```{r}
+alpha3 <- 8
+beta3 <- 160
+sim_inicial <- tibble(theta = rbeta(10000, 8, 160))
+ggplot(sim_inicial) + geom_histogram(aes(x = theta, y = ..density..), bins = 15)
+```
+
+  
+  - Para dos de los estados: Idaho y Virginia, adicional a calcular la posterior
+  usando las propiedades de la familia conjugada, utiliza Stan para hacer la inferencia, 
+  revisa los diagnósticos de convergencia y describe tus observaciones ($\hat{R}$ y $ESS$).
+  
+```{r}
+alpha4 <- alpha3 + k
+beta4 <- beta3 + (n-k)
+results <- results %>% mutate(alpha_pos = alpha3 + very_lib, beta_pos = beta3 + (tot - very_lib), media_posterior = alpha_pos / (alpha_pos + beta_pos))
+results
+```
+
+  
+```{r}
+results %>% filter(state == 'idaho' | state == 'virginia')
+idaho_n = 140
+idaho_y = 14
+virginia_n = 896
+virginia_y = 36
+```
+
+```{r}
+#STAN
+archivo_stan <- file.path("./modelo-1.stan")
+mod <- cmdstan_model(archivo_stan)
+mod
+```
+
+*Para Idaho:*
+
+Pasamos datos y muestreamos.
+```{r}
+# El método sample de un objeto CmdStanModel corre la cadena  principal de Markov del algoritmo de Monte Carlo 
+
+datos_lista <- list(n = idaho_n, y = idaho_y)
+ajuste <- mod$sample(
+  data = datos_lista, #los datos en formato json
+  seed = 1234, #semilla
+  chains = 4, # número de cadenas que se va a correr
+  refresh = 500) #cada cuanto se imprime las actualizaciones
+```
+
+Checamos diagnósticos:
+
+```{r}
+ajuste$cmdstan_diagnose()
+```
+
+Si no hay problemas, podemos ver el resumen:
+
+```{r}
+ajuste$summary()
+```
+
+*El valor de* $\hat{R}$ *es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien* 
+
+library$ESS$ *bulk y tail también son apropiados pues son mayores a 100*
+
+https://mc-stan.org/rstan/reference/Rhat.html
+
+Podemos ver las cadenas de la siguiente forma:
+
+```{r}
+theta_tbl <- ajuste$draws(c("theta", "theta_inicial")) %>% as_draws_df()
+ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
+  geom_line() +
+  facet_wrap(~.chain, ncol = 1)
+```
+
+*Para Virginia:*
+
+Pasamos datos y muestreamos.
+```{r}
+# El método sample de un objeto CmdStanModel corre la cadena  principal de Markov del algoritmo de Monte Carlo 
+
+datos_lista <- list(n = virginia_n, y = virginia_y)
+ajuste <- mod$sample(
+  data = datos_lista, #los datos en formato json
+  seed = 1234, #semilla
+  chains = 4, # número de cadenas que se va a correr
+  refresh = 500) #cada cuanto se imprime las actualizaciones
+```
+
+Checamos diagnósticos:
+
+```{r}
+ajuste$cmdstan_diagnose()
+```
+
+Si no hay problemas, podemos ver el resumen:
+
+```{r}
+ajuste$summary()
+```
+
+*El valor de* $\hat{R}$ *es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien* 
+
+library$ESS$ *bulk y tail también son apropiados pues son mayores a 100*
+
+https://mc-stan.org/rstan/reference/Rhat.html
+
+Podemos ver las cadenas de la siguiente forma:
+
+```{r}
+theta_tbl <- ajuste$draws(c("theta", "theta_inicial")) %>% as_draws_df()
+ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
+  geom_line() +
+  facet_wrap(~.chain, ncol = 1)
+```
+
+
+
+  - Utiliza la media posterior de cada estado como estimador puntual y repite las
+  gráficas del inciso anterior.
+
+```{r}
+ggplot(results, aes(x=tot, y=media_posterior)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
+
+ggplot(results, aes(x=vote_Obama_pct, y=media_posterior)) +
+  geom_line()+
+  geom_hline(yintercept = p_hat, color = "red") 
+```
+
+
+**Nota:** En problemas como este, donde estamos estimando un parámetro para cada 
+grupo (estado e nuestro caso) podemos optar por un modelo jerárquico, en 
+donde la distribución de las $\theta_j$ no esta dada por la incial 
+sino que se modela con un nivel adicional, cuyos parámetros se estiman con los datos
+y tienen a su vez una distribución incial:
+
+
+$$y_j|\theta_j \sim Binomial(n_j, \theta_j)$$
+
+$$\theta_j \sim Beta(\alpha, \beta) $$
+
+$$\alpha \sim g(a_o), \beta \sim f(b_0)$$
+
+donde $g(a_0)$ y $f(b_0)$ son las inciales seleccionadas con conocimiento experto.
