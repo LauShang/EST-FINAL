@@ -1,6 +1,8 @@
 ---
 title: "Final Fundamentos 2023"
-author: "Lauro Reyes Rosas 000213245 & Sara Luz Valenzuela Camacho 000204535"
+author: 
+  - Lauro Reyes Rosas, 000213245 
+  - Sara Luz Valenzuela Camacho, 000204535
 date: "2023-12-05"
 output: html_document
 ---
@@ -733,11 +735,41 @@ solucion$par
 
 ### Por Estado
 
+```{r}
+data <- poll_data %>%
+  filter(!state %in% c('alaska', 'hawaii','washington dc')) %>%
+  mutate(x = if_else(ideo == 'very liberal', 1, 0, 0)) %>%
+  group_by(state) %>%
+  summarise(very_liberal = sum(x), n = n(), p = very_liberal/n, .groups="drop")
+
+data %>% kable("html") %>%
+  kable_styling("striped", full_width = FALSE)
+```
+
 
   - Grafica en el eje *x* el número de encuestas para cada estado y en el eje *y* 
   la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas?  
   
+
 ```{r}
+ggplot(data, aes(x = n, y = p)) +
+  geom_point(color = 'lightblue', size = 5) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Very Liberal vs Encuestados",
+       x = "Total Encuestas",
+       y = "Very Liberal Prop") +
+  theme_minimal()+
+  geom_hline(yintercept = p_hat_tot, color = "red")
+```
+ 
+ 
+ - **Con forme aumenta el número de encuestas, el valor de máxima verosimilitud se acerca al calculado para toda la base.**
+ - **La gran mayoria de los estados están agrupados en menos de 1000 encuestas y con un estimado de "very liberal" entre .25 y .75, podemos que se tiene una ligera tendencia a la alza**
+  
+  
+```{r, include=FALSE}
+
+#################### Sara
 very_lib <- datos1 %>%  filter(ideo == "very liberal") %>% group_by(state,ideo) %>% summarise(n())
 all_enc <- datos1 %>% group_by(state) %>% summarise(n())
 very_lib <- very_lib %>% inner_join(all_enc,by="state") %>% rename("very_lib" = "n().x", "tot" = "n().y") %>% mutate(max_ver = very_lib/tot)
@@ -748,12 +780,32 @@ ggplot(very_lib, aes(x=tot, y=max_ver)) +
 
 ```
 
-*Con forme aumenta el número de encuestas, el valor de máxima verosimilitud se acerca al calculado para toda la base.*
 
   - Grafica en el eje *x* el porcentaje de votos que obtuvo Obama en la elección
   para cada estado y en el eje *y* la estimación de máxima verosimilitud para *very liberal*. ¿Qué observas? (usa los datos *2008ElectionResult.csv*)
   
+
 ```{r}
+election_result <- read_csv('data/2008ElectionResult.csv')
+election_result <- election_result %>%
+  mutate(state = tolower(state)) %>%
+  inner_join(data %>% select(c('state','p')), by=c("state")) %>%
+  rename(very_liberal_estimate = p) %>%
+  mutate(vote_Obama_pct = vote_Obama_pct / 100)
+
+ggplot(election_result, aes(x = vote_Obama_pct, y = very_liberal_estimate)) +
+  geom_point(color = 'lightblue', size = 5) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(title = "Very Liberal vs PCT Obama",
+       x = "PCT Obama",
+       y = "Very Liberal Prop") +
+  theme_minimal()+
+  geom_hline(yintercept = p_hat_tot, color = "red") 
+```
+  
+```{r, include=FALSE}
+
+#################### Sara
 results = read.csv('./data/2008ElectionResult.csv')
 results <- results %>% select(vote_Obama_pct,state) %>% mutate(state = tolower(state) )
 #vote_Obama_pct
@@ -763,14 +815,15 @@ glimpse(results)
 ```
 
 
-```{r}
+```{r, include=FALSE}
+
+#################### Sara
 ggplot(results, aes(x=vote_Obama_pct, y=max_ver)) +
   geom_line()+
   geom_hline(yintercept = p_hat_tot, color = "red") 
 ```
 
-*Con forme aumenta el número de votos para Obama, el valor de máxima verosimilitud se acerca al calculado para toda la base.*
-
+- **Los estados que votan por Obama No son muy liberales, tal vez más de centro**
 
 * Estima el mismo porcentaje (*very liberal*) usando inferencia bayesiana, en particular
 la familia conjugada beta-binomial. Deberás estimar la proporción de manera 
@@ -779,11 +832,27 @@ largo de todos: $Beta(8,160)$.
 
   - Simula de la distribución incial y describe.
   
-*nos conviene usar una inicial Beta debido a que buscamos estimar una proporción* $\theta$ *de una población*
+- **Nos conviene usar una inicial Beta debido a que buscamos estimar una proporción** $\theta$ **de una población**
 
-*y con los parámetros propuestos en el ejercicio, el promedio se acerca al valor de máxima verosimilitud*
+- **y con los parámetros propuestos en el ejercicio(**$Beta(8,160)$**), el promedio se acerca al valor de máxima verosimilitud**
 
+  
 ```{r}
+alpha <- 8
+beta <- 160
+simulacion_inicial <- rbeta(5000, alpha, beta)
+ggplot(tibble(simulacion_inicial)) + geom_histogram(aes(x = simulacion_inicial, y = ..density..), bins = 20, fill="lightblue") +
+  theme_minimal()
+```
+  
+- **La media es similar al valor de máxima verosimilitud para la población total**
+  
+
+
+
+```{r, include=FALSE}
+
+#################### Sara
 alpha3 <- 8
 beta3 <- 160
 sim_inicial <- tibble(theta = rbeta(10000, 8, 160))
@@ -795,21 +864,59 @@ ggplot(sim_inicial) + geom_histogram(aes(x = theta, y = ..density..), bins = 15)
   usando las propiedades de la familia conjugada, utiliza Stan para hacer la inferencia, 
   revisa los diagnósticos de convergencia y describe tus observaciones ($\hat{R}$ y $ESS$).
   
+
+###### posterior
 ```{r}
+simulacion_posterior <- function(success, obs, alpha, beta, n){
+  alpha_posterior <- alpha + success
+  beta_posterior <- beta + (obs -success)
+  posterior <- rbeta(n,alpha_posterior,beta_posterior)
+  posterior
+}
+
+posterior_by_state <- tibble(state = character(), mean = numeric(), std = numeric(), ci_lower = numeric(), ci_upper = numeric())
+
+for (current_state in unique(data$state)) {
+  current_state_data <- filter(data, state == current_state)
+  prop_posterior <- simulacion_posterior(current_state_data$very_liberal,current_state_data$n,
+    alpha,beta,500
+  )
+  # Calculate
+  mean_value <- mean(prop_posterior)
+  std_value <- sd(prop_posterior)
+  ci_lower_value <- quantile(prop_posterior, probs = 0.025)
+  ci_upper_value <- quantile(prop_posterior, probs = 0.975)
+
+  posterior_by_state <- bind_rows(posterior_by_state, tibble(state = current_state, mean = mean_value, std = std_value, ci_lower = ci_lower_value, ci_upper = ci_upper_value))
+}
+posterior_by_state %>% arrange(desc(mean)) %>%
+  kable("html") %>%
+  kable_styling("striped", full_width = FALSE)
+```
+  
+```{r, include=FALSE}
+
+#################### Sara
 alpha4 <- alpha3 + k
 beta4 <- beta3 + (n-k)
 results <- results %>% mutate(alpha_pos = alpha3 + very_lib, beta_pos = beta3 + (tot - very_lib), media_posterior = alpha_pos / (alpha_pos + beta_pos))
 results
 ```
 
+##### Estados de Idaho y Virginia:
   
 ```{r}
-results %>% filter(state == 'idaho' | state == 'virginia')
+
+#################### Sara
+results %>% filter(state == 'idaho' | state == 'virginia') %>%   kable("html") %>%
+  kable_styling("striped", full_width = FALSE)
 idaho_n = 140
 idaho_y = 14
 virginia_n = 896
 virginia_y = 36
 ```
+
+##### STAN
 
 ```{r}
 #STAN
@@ -818,7 +925,7 @@ mod <- cmdstan_model(archivo_stan)
 mod
 ```
 
-*Para Idaho:*
+**Para Idaho:**
 
 Pasamos datos y muestreamos.
 ```{r}
@@ -832,25 +939,26 @@ ajuste <- mod$sample(
   refresh = 500) #cada cuanto se imprime las actualizaciones
 ```
 
-Checamos diagnósticos:
+**Revisamos diagnósticos:**
 
 ```{r}
 ajuste$cmdstan_diagnose()
 ```
 
-Si no hay problemas, podemos ver el resumen:
+**Si no hay problemas, podemos ver el resumen:**
 
 ```{r}
-ajuste$summary()
+ajuste$summary()%>%   kable("html") %>%
+  kable_styling("striped", full_width = FALSE)
 ```
 
-*El valor de* $\hat{R}$ *es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien* 
+**El valor de** $\hat{R}$ **es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien**
 
-library$ESS$ *bulk y tail también son apropiados pues son mayores a 100*
+$ESS$ **bulk y tail también son apropiados pues son mayores a 100**
 
 https://mc-stan.org/rstan/reference/Rhat.html
 
-Podemos ver las cadenas de la siguiente forma:
+**Podemos ver las cadenas de la siguiente forma:**
 
 ```{r}
 theta_tbl <- ajuste$draws(c("theta", "theta_inicial")) %>% as_draws_df()
@@ -859,7 +967,7 @@ ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
   facet_wrap(~.chain, ncol = 1)
 ```
 
-*Para Virginia:*
+**Para Virginia:**
 
 Pasamos datos y muestreamos.
 ```{r}
@@ -873,25 +981,19 @@ ajuste <- mod$sample(
   refresh = 500) #cada cuanto se imprime las actualizaciones
 ```
 
-Checamos diagnósticos:
+**Checamos diagnósticos:**
 
 ```{r}
 ajuste$cmdstan_diagnose()
 ```
 
-Si no hay problemas, podemos ver el resumen:
+**Si no hay problemas, podemos ver el resumen:**
 
 ```{r}
 ajuste$summary()
 ```
+**En conclusión, tanto para Idaho como para Virginia, los valores de R-hat cercanos a 1 indican una convergencia sólida de las cadenas MCMC y estimaciones de parámetros confiables. Además, los altos valores de ess_bulk y ess_tail en ambos estados sugieren una gran cantidad de muestras efectivas, respaldando resultados estadísticamente precisos. **
 
-*El valor de* $\hat{R}$ *es apropiado para sar, dado que es menor que 1.05, por lo que las cadenas se han mezclado bien* 
-
-library$ESS$ *bulk y tail también son apropiados pues son mayores a 100*
-
-https://mc-stan.org/rstan/reference/Rhat.html
-
-Podemos ver las cadenas de la siguiente forma:
 
 ```{r}
 theta_tbl <- ajuste$draws(c("theta", "theta_inicial")) %>% as_draws_df()
@@ -905,7 +1007,51 @@ ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
   - Utiliza la media posterior de cada estado como estimador puntual y repite las
   gráficas del inciso anterior.
 
+
 ```{r}
+result_bayes <- posterior_by_state %>%
+  mutate(method = 'bayes') %>%
+  rename(mle = mean) %>%
+  select(state, mle, method) %>%
+  inner_join(data %>% select(c('state','n')), by = "state") %>%
+  inner_join(election_result %>% select(c('state','vote_Obama_pct')), by = "state") #%>%
+
+result_freq <- data %>%
+  mutate(method = 'freq') %>%
+  rename(mle = p) %>%
+  select(state, mle, method, n) %>%
+  inner_join(election_result %>% select(c('state','vote_Obama_pct')), by = "state")
+
+final_result <- bind_rows(result_bayes, result_freq) %>% 
+  mutate(state = str_sub(state, 1, 3))
+
+ggplot(final_result, aes(x=n, y=mle, color=method)) +
+  geom_point(size = 2) +
+  geom_text(aes(label=state), hjust=0, vjust=0) +
+  labs(title = "Very Liberal vs Encuestados",
+       x = "Total Encuestas",
+       y = "Very Liberal Prop") +
+  theme_minimal()
+
+ggplot(final_result, aes(x=vote_Obama_pct, y=mle, color=method)) +
+  geom_point(size = 2) +
+  geom_text(aes(label=state), hjust=0, vjust=0) +
+  labs(title = "Very Liberal vs PCT Obama",
+       x = "PCT Obama",
+       y = "Very Liberal Prop") +
+  theme_minimal()
+```
+
+
+- **El método bayesiano muestra una proporción más controlada de individuos muy liberales en cada estado, en contraste con el enfoque frecuentista, donde se observa una dispersión mayor.**
+
+
+
+
+
+```{r, include=FALSE}
+
+########## Sara
 ggplot(results, aes(x=tot, y=media_posterior)) +
   geom_line()+
   geom_hline(yintercept = p_hat_tot, color = "red") 
