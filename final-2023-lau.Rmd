@@ -52,8 +52,7 @@ p_value <- 2 * (1 - pnorm(abs(w)))
 cat("p-value: ",p_value)
 ```
 
-- **Elijimos prueba de Wald porque no depende de ningún parámetro desconocido**
-- **Tenemos evidencia baja de que el porcentaje es menor en el condado del estudio ya que el p value es .11**
+- **Tenemos evidencia baja de que el porcentaje es menor en el condado del estudio ya que el p value es .113, por lo tanto no podemos rechazar la hipótesis nula**
 
 1.2 Mendel criaba chícharos de semillas lisas amarillas y de semillas
 corrugadas verdes. Éstas daban lugar a 4 tipos de descendientes: amarrillas lisas, amarillas corrugadas, verdes lisas y verdes corrugadas. El número de cada una
@@ -217,6 +216,7 @@ ggplot(reps_boot, aes(x = estimador_boot)) +
 especificando una inicial Gamma Inversa, justifica tu elección de los parámetros 
 de la distribución inicial y grafica la función de densidad.
 
+**Varianza de la gamma inversa**
 $$\sigma^2 = \frac{\beta^2}{{(\alpha-1)}^2 - (\alpha-2)}\quad for\quad\alpha>2 $$
 **por lo tanto escojemos** $\alpha$ = 2 **y** $\beta$ = $\hat{\theta}$ **para que la escala de la distribución inicial sea igual a la estimación de máxima verosimilitud de la varianza.**
 
@@ -232,7 +232,23 @@ plot(x_axis, dinv_gamma(x_axis, alpha=alpha, beta=beta), type="l")
 ```
 
 * Calcula analíticamente la distribución posterior.
+*La verosimilitud es:*
 
+$$L(\sigma^2|y) \propto (\sigma^2)^{n/2}e^{-\frac{n}{2\sigma^2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}$$
+
+*La priori es:*
+
+$$p(\sigma^2)=\frac{\beta^\alpha}{\Gamma(\alpha)}(\sigma^2)^{-(\alpha+1)}e^{-\beta/\sigma^2}$$ 
+*para* $\sigma^2>0$ 
+
+
+*Por tanto, la posterior es:*
+
+$$p(\sigma^2|y)\propto L(\sigma^2|y) p(\sigma^2)$$
+$$\propto(\sigma^2)^{n/2}e^{-\frac{n}{2\sigma^2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}(\sigma^2)^{-(\alpha+1)}e^{-\beta/\sigma^2}$$
+$$=(\sigma^2)^{-(\alpha+\frac{n}{2}+1)}e^{-\frac{\beta+\frac{n}{2}[\frac{1}{n}\sum_{i=1}^n(Y_i-\mu)^2]}{\sigma^2}}$$
+
+*Por tanto la posteriori es una Inversa gamma con parámetros:* 
 $$f(\sigma^2 \,|\, x_1, ..., x_n) = \text{GammaI}\left(\alpha + \frac{n}{2}, \beta + \frac{1}{2}\sum_{i=1}^{n}(x_i - \mu)^2\right)$$
 * Realiza un histograma de simulaciones de la distribución posterior y calcula
 el error estándar de la distribución.
@@ -377,6 +393,7 @@ ggplot(election_result, aes(x = vote_Obama_pct, y = very_liberal_estimate)) +
   theme_minimal()
 ```
 
+**En general, la proporción de very liberal aumenta en los extremos tanto izquierda o derecha de la proporción que voto por Obama**
 
 * Estima el mismo porcentaje (*very liberal*) usando inferencia bayesiana, en particular
 la familia conjugada beta-binomial. Deberás estimar la proporción de manera 
@@ -408,7 +425,7 @@ simulacion_posterior <- function(success, obs, alpha, beta, n){
   posterior
 }
 
-posterior_by_state <- tibble(state = character(), mean = numeric(), std = numeric(), ci_lower = numeric(), ci_upper = numeric())
+posterior_by_state <- tibble(state = character(), posterior = numeric())
 
 for (current_state in unique(data$state)) {
   current_state_data <- filter(data, state == current_state)
@@ -417,13 +434,11 @@ for (current_state in unique(data$state)) {
   )
   # Calculate
   mean_value <- mean(prop_posterior)
-  std_value <- sd(prop_posterior)
-  ci_lower_value <- quantile(prop_posterior, probs = 0.025)
-  ci_upper_value <- quantile(prop_posterior, probs = 0.975)
 
-  posterior_by_state <- bind_rows(posterior_by_state, tibble(state = current_state, mean = mean_value, std = std_value, ci_lower = ci_lower_value, ci_upper = ci_upper_value))
+  posterior_by_state <- bind_rows(posterior_by_state, tibble(state = current_state, posterior = mean_value))
 }
-posterior_by_state %>% arrange(desc(mean)) %>%
+
+posterior_by_state %>% arrange(desc(posterior)) %>%
   kable("html") %>%
   kable_styling("striped", full_width = FALSE)
 ```
@@ -472,7 +487,7 @@ ggplot(theta_tbl, aes(x = .iteration, y = theta)) +
 ```{r}
 result_bayes <- posterior_by_state %>%
   mutate(method = 'bayes') %>%
-  rename(mle = mean) %>%
+  rename(mle = posterior) %>%
   select(state, mle, method) %>%
   inner_join(data %>% select(c('state','n')), by = "state") %>%
   inner_join(election_result %>% select(c('state','vote_Obama_pct')), by = "state") #%>%
@@ -483,8 +498,7 @@ result_freq <- data %>%
   select(state, mle, method, n) %>%
   inner_join(election_result %>% select(c('state','vote_Obama_pct')), by = "state")
 
-final_result <- bind_rows(result_bayes, result_freq) %>% 
-  mutate(state = str_sub(state, 1, 3))
+final_result <- bind_rows(result_bayes, result_freq)
 
 ggplot(final_result, aes(x=n, y=mle, color=method)) +
   geom_point(size = 2) +
